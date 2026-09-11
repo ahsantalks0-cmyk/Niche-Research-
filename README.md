@@ -9,8 +9,9 @@ powered by a 35-agent swarm, built with Electron.
 
 ## ✨ Features (Phase 0.1 — Foundation)
 
-- **Premium "Obsidian & Champagne" UI** — luxury dark theme (default) + an equally
-  refined ivory light theme, with smooth cross-fade switching and persistence
+- **"Noir Atelier" UI** — true-black canvas with film grain, emerald × copper
+  accents, masthead + floating dock navigation (no sidebar), and a refined
+  light "Gallery" theme with smooth cross-fade switching and persistence
 - **6 fully designed pages** — Dashboard, New Research, Niches, Reports,
   Consultant Chat, Settings (SPA navigation, zero page reloads)
 - **Interactive dashboard** — animated KPI counters with sparklines, line /

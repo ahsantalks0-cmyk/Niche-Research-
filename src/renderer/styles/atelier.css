@@ -1,0 +1,264 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   NRD · atelier.css — "NOIR ATELIER" design system (new concept, from zero)
+   True black canvas · emerald × copper · editorial display type · film grain
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('../../../assets/fonts/outfit-latin-300-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../../assets/fonts/outfit-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../../../assets/fonts/outfit-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../../../assets/fonts/outfit-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../../assets/fonts/outfit-latin-700-normal.woff2') format('woff2');
+}
+
+:root,
+.theme-dark {
+  --font-sans: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+
+  /* true black stage */
+  --black: #000000;
+  --ink-950: #060607;
+  --ink-900: #0B0B0D;
+  --ink-800: #121215;
+  --ink-700: #1A1A1F;
+
+  /* emerald (primary) × copper (secondary) */
+  --em: #34D399;
+  --em-deep: #0E9F6E;
+  --em-dim: rgba(52, 211, 153, 0.12);
+  --cu: #C98B5F;
+  --cu-deep: #A96B41;
+  --cu-soft: #E8B98F;
+  --cu-dim: rgba(201, 139, 95, 0.13);
+
+  --grad-cu: linear-gradient(120deg, #E8B98F 0%, #C98B5F 48%, #A96B41 100%);
+  --grad-hero: linear-gradient(105deg, #FFFFFF 0%, #E8B98F 55%, #C98B5F 100%);
+
+  /* text */
+  --text: #F2F1ED;
+  --text-2: #A5A29B;
+  --text-3: #6C6963;
+
+  /* status */
+  --ok: #34D399;
+  --warn: #C98B5F;
+  --bad: #E07A6A;
+  --mut: #8B8880;
+
+  /* lines */
+  --line: rgba(255, 255, 255, 0.07);
+  --line-2: rgba(255, 255, 255, 0.13);
+  --line-cu: rgba(201, 139, 95, 0.30);
+  --line-em: rgba(52, 211, 153, 0.30);
+
+  /* depth */
+  --shadow-1: 0 2px 10px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 18px 50px -18px rgba(0, 0, 0, 0.8);
+  --shadow-3: 0 40px 100px -30px rgba(0, 0, 0, 0.9);
+  --glow-cu: 0 8px 30px -8px rgba(201, 139, 95, 0.4);
+  --glow-em: 0 8px 30px -8px rgba(52, 211, 153, 0.3);
+
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --ease: cubic-bezier(0.22, 0.9, 0.28, 1);
+  --spring: cubic-bezier(0.32, 1.35, 0.4, 1);
+  --t-fast: 150ms;
+  --t: 260ms;
+  --t-slow: 560ms;
+
+  --chart-grid: rgba(255, 255, 255, 0.055);
+  --chart-tip: rgba(16, 16, 18, 0.95);
+}
+
+/* light counterpart — "GALLERY" */
+.theme-light {
+  --black: #F4F2EE;
+  --ink-950: #FBFAF8;
+  --ink-900: #FFFFFF;
+  --ink-800: #F6F4F0;
+  --ink-700: #EDEBE6;
+
+  --em: #0B7C55;
+  --em-deep: #085A3E;
+  --em-dim: rgba(11, 124, 85, 0.10);
+  --cu: #A4653A;
+  --cu-deep: #83502E;
+  --cu-soft: #C98B5F;
+  --cu-dim: rgba(164, 101, 58, 0.11);
+
+  --grad-cu: linear-gradient(120deg, #B97A4B 0%, #A4653A 50%, #83502E 100%);
+  --grad-hero: linear-gradient(105deg, #26221C 0%, #A4653A 60%, #83502E 100%);
+
+  --text: #201D18;
+  --text-2: #615D56;
+  --text-3: #94908A;
+
+  --ok: #0B7C55;
+  --warn: #A4653A;
+  --bad: #B0503F;
+  --mut: #7C7870;
+
+  --line: rgba(32, 29, 24, 0.09);
+  --line-2: rgba(32, 29, 24, 0.16);
+  --line-cu: rgba(164, 101, 58, 0.35);
+  --line-em: rgba(11, 124, 85, 0.32);
+
+  --shadow-1: 0 2px 10px rgba(32, 29, 24, 0.06);
+  --shadow-2: 0 18px 44px -18px rgba(32, 29, 24, 0.18);
+  --shadow-3: 0 36px 80px -28px rgba(32, 29, 24, 0.26);
+  --glow-cu: 0 8px 26px -10px rgba(164, 101, 58, 0.42);
+  --glow-em: 0 8px 26px -10px rgba(11, 124, 85, 0.32);
+
+  --chart-grid: rgba(32, 29, 24, 0.07);
+  --chart-tip: rgba(255, 255, 255, 0.97);
+}
+
+/* --------------------------------- reset ---------------------------------- */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--black);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+  transition: background var(--t-slow) var(--ease), color var(--t) var(--ease);
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button { background: none; border: none; cursor: pointer; }
+
+/* ------------------------------ film grain -------------------------------- */
+
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+}
+
+.theme-light .grain { opacity: 0.035; }
+
+/* single copper floor-glow, very low */
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(1100px 480px at 50% 118%, rgba(201, 139, 95, 0.09), transparent 65%),
+    radial-gradient(900px 420px at 88% -12%, rgba(52, 211, 153, 0.045), transparent 60%);
+}
+
+/* ------------------------------- typography ------------------------------- */
+
+.display {
+  font-weight: 300;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+
+.overline {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.text-muted { color: var(--text-2); }
+.text-faint { color: var(--text-3); }
+.text-cu { color: var(--cu-soft); }
+.text-em { color: var(--em); }
+
+.hero-num {
+  background: var(--grad-hero);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ------------------------------- scrollbars ------------------------------- */
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--line-cu);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cu);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+::selection { background: rgba(201, 139, 95, 0.28); color: #fff; }
+.theme-light ::selection { color: var(--text); }
+
+/* --------------------------- theme cross-fade veil ------------------------- */
+
+#theme-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: var(--black);
+  opacity: 0;
+  transition: opacity 300ms var(--ease);
+}
+#theme-veil.active { opacity: 0.95; }
+
+/* ------------------------------ reduced motion ----------------------------- */
+
+body.reduce-motion *,
+body.reduce-motion *::before,
+body.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
