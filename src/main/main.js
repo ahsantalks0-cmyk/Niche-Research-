@@ -38,7 +38,7 @@ function createWindow() {
     show: false, // revealed after first paint → smooth open animation
     frame: false,
     titleBarStyle: 'hidden',
-    backgroundColor: '#0D0C11',
+    backgroundColor: '#000000',
     icon: iconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
