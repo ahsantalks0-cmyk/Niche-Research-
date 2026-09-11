@@ -136,15 +136,17 @@
                   <div class="text-muted" style="font-size:12px">Agentic Intelligence for Niche Discovery</div>
                 </div>
               </div>
-              <div class="est" style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px dashed var(--line); font-size:12.5px">
-                <span class="text-muted">Version</span>
-                <span class="version-pill" style="padding:3px 10px"><b id="about-version">…</b></span>
+              <div class="kv-row">
+                <span class="kv-k">Version</span>
+                <span class="kv-v" id="about-version">…</span>
               </div>
-              <div class="est" style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px dashed var(--line); font-size:12.5px">
-                <span class="text-muted">Electron</span><b id="about-electron" style="font-weight:600">…</b>
+              <div class="kv-row">
+                <span class="kv-k">Runtime</span>
+                <span class="kv-v" id="about-electron">…</span>
               </div>
-              <div class="est" style="display:flex; justify-content:space-between; padding:8px 0; font-size:12.5px">
-                <span class="text-muted">Agent Roster</span><b style="font-weight:600">35 agents · 5 layers</b>
+              <div class="kv-row">
+                <span class="kv-k">Agent Roster</span>
+                <span class="kv-v">35 agents · 5 layers</span>
               </div>
             </div>
           </div>

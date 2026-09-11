@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * NRD · toast.js — premium toast notifications with icons and auto-dismiss.
+ * NRD · toast.js — minimal premium toasts (text-first, no icon chips).
  * Exposes window.NRDToast.show({ type, title, msg, timeoutMs }).
  */
 (function () {
@@ -22,16 +22,13 @@
    * @returns {() => void} dismiss
    */
   function show(opts) {
-    const { type = 'info', title, msg = '', timeoutMs = 5000 } = opts || {};
+    const { type = 'info', title, msg = '', timeoutMs = 4500 } = opts || {};
     const root = ensureStack();
 
     const el = document.createElement('div');
     el.className = `toast t-${type}`;
     el.setAttribute('role', 'status');
-
-    const iconName = type === 'success' ? 'check' : type === 'error' ? 'alert' : 'info';
     el.innerHTML = `
-      <div class="t-icon">${window.NRDIcons.get(iconName)}</div>
       <div class="t-body">
         <div class="t-title"></div>
         <div class="t-msg"></div>
@@ -40,6 +37,7 @@
 
     el.querySelector('.t-title').textContent = title;
     el.querySelector('.t-msg').textContent = msg;
+
     root.appendChild(el);
 
     let done = false;
@@ -47,7 +45,7 @@
       if (done) return;
       done = true;
       el.classList.add('out');
-      setTimeout(() => el.remove(), 260);
+      setTimeout(() => el.remove(), 240);
     };
 
     el.querySelector('.t-close').addEventListener('click', dismiss);
