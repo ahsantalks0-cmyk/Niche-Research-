@@ -103,8 +103,8 @@
                 <div class="ph-sub">Share of validated niches</div>
               </div>
             </div>
-            <div class="chart-box" style="display:grid; grid-template-rows:1fr auto">
-              <canvas id="chart-modes"></canvas>
+            <div class="donut-flex">
+              <div class="donut-wrap"><canvas id="chart-modes"></canvas></div>
               <div id="modes-legend" class="legend-rows"></div>
             </div>
           </div>
