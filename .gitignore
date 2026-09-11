@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist_e2e/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Temporary font fetch assets
+scripts/tmp-font/
+
+# Freebuff workspace metadata
+.freebuff/

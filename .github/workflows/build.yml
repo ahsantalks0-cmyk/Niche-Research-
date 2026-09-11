@@ -1,0 +1,60 @@
+name: Build & Release
+
+# Every push to main → build the Windows installer → publish a GitHub Release
+# (with the .exe + latest.yml) so the in-app electron-updater can find it.
+# Tag = v{version} from package.json. Bump the version to ship a new release.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Syntax lint
+        run: npm run lint
+
+      - name: Inject publish repo (owner/name)
+        shell: pwsh
+        run: |
+          $owner = "${{ github.repository_owner }}"
+          $repo  = "${{ github.event.repository.name }}"
+          (Get-Content app.config.json) `
+            -replace '__GH_OWNER__', $owner `
+            -replace '__GH_REPO__', $repo |
+          Set-Content app.config.json
+          Write-Host "Publish target: $owner/$repo"
+
+      - name: Build & package (electron-builder → NSIS)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx electron-builder --win nsis --publish always
+
+      - name: Upload installer artifact (always, for inspection)
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/*.exe
+          if-no-files-found: error

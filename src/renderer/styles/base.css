@@ -1,0 +1,278 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   NRD · base.css — Outfit font, design tokens, reset, typography
+   Design direction: "Obsidian & Champagne" — private-wealth luxury
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ------------------------------- Outfit font ------------------------------- */
+
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../../../assets/fonts/outfit-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../../../assets/fonts/outfit-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../../../assets/fonts/outfit-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../../../assets/fonts/outfit-latin-700-normal.woff2') format('woff2');
+}
+
+/* ------------------------------- dark tokens ------------------------------- */
+
+:root,
+.theme-dark {
+  --font-sans: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+
+  /* obsidian surfaces */
+  --bg: #0B0E17;
+  --bg-accent-a: #131B2E;
+  --bg-accent-b: #0A0D16;
+  --panel: #131829;
+  --panel-2: #182033;
+  --panel-deep: #0E1322;
+  --hover: rgba(244, 231, 195, 0.05);
+
+  /* champagne gold system */
+  --gold: #D4AF37;
+  --gold-bright: #E9CE8C;
+  --gold-soft: #F4E7C3;
+  --gold-deep: #B08D2F;
+  --gold-glow: rgba(212, 175, 55, 0.14);
+  --gold-glow-strong: rgba(233, 206, 140, 0.35);
+
+  /* electric teal (secondary) */
+  --teal: #38C7B8;
+  --teal-soft: #6EE2D6;
+
+  /* text */
+  --text: #E5E7EB;
+  --text-2: #9CA3AF;
+  --text-3: #64748B;
+
+  /* lines & borders */
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.12);
+
+  /* glass */
+  --glass: rgba(19, 24, 41, 0.72);
+  --glass-blur: 16px;
+
+  /* shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 24px 64px -16px rgba(0, 0, 0, 0.65);
+  --shadow-glow: 0 8px 32px -8px var(--gold-glow-strong);
+
+  /* semantic */
+  --success: #34D399;
+  --warning: #FBBF24;
+  --danger: #F87171;
+  --info: #60A5FA;
+
+  --chip-idle-bg: rgba(156, 163, 175, 0.1);
+  --chip-idle-fg: #9CA3AF;
+  --chip-active-bg: rgba(52, 211, 153, 0.12);
+  --chip-active-fg: #34D399;
+  --chip-done-bg: rgba(212, 175, 55, 0.12);
+  --chip-done-fg: #E9CE8C;
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --ease: cubic-bezier(0.25, 0.8, 0.3, 1);
+  --t-fast: 180ms;
+  --t: 240ms;
+  --t-slow: 420ms;
+}
+
+/* ------------------------------ light tokens ------------------------------- */
+
+.theme-light {
+  --bg: #F5F3EE;
+  --bg-accent-a: #EDE9E0;
+  --bg-accent-b: #F8F6F1;
+  --panel: #FFFFFF;
+  --panel-2: #FBF9F4;
+  --panel-deep: #F3F0E8;
+  --hover: rgba(23, 33, 51, 0.04);
+
+  --gold: #B08D2F;
+  --gold-bright: #C9A544;
+  --gold-soft: #8C6D1F;
+  --gold-deep: #8C6D1F;
+  --gold-glow: rgba(176, 141, 47, 0.12);
+  --gold-glow-strong: rgba(201, 165, 68, 0.3);
+
+  --teal: #0F9C8E;
+  --teal-soft: #0B7C72;
+
+  --text: #1D2537;
+  --text-2: #5C6470;
+  --text-3: #8B93A1;
+
+  --line: rgba(23, 33, 51, 0.09);
+  --line-strong: rgba(23, 33, 51, 0.16);
+
+  --glass: rgba(255, 255, 255, 0.8);
+  --glass-blur: 16px;
+
+  --shadow-sm: 0 1px 2px rgba(23, 33, 51, 0.06);
+  --shadow-md: 0 10px 28px -10px rgba(23, 33, 51, 0.16);
+  --shadow-lg: 0 28px 64px -20px rgba(23, 33, 51, 0.22);
+  --shadow-glow: 0 8px 28px -10px rgba(201, 165, 68, 0.4);
+
+  --success: #0E9F6E;
+  --warning: #B45309;
+  --danger: #DC2626;
+  --info: #2563EB;
+
+  --chip-idle-bg: rgba(92, 100, 112, 0.1);
+  --chip-idle-fg: #5C6470;
+  --chip-active-bg: rgba(14, 159, 110, 0.12);
+  --chip-active-fg: #0E9F6E;
+  --chip-done-bg: rgba(176, 141, 47, 0.14);
+  --chip-done-fg: #8C6D1F;
+}
+
+/* ---------------------------------- reset ---------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+  user-select: none;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* ------------------------------ ambient aura ------------------------------- */
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1000px 600px at 85% -10%, var(--gold-glow), transparent 60%),
+    radial-gradient(800px 500px at -10% 110%, rgba(56, 199, 184, 0.05), transparent 55%);
+  transition: background var(--t-slow) var(--ease);
+}
+
+/* ------------------------------- typography -------------------------------- */
+
+h1, h2, h3, h4 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.text-muted { color: var(--text-2); }
+.text-faint { color: var(--text-3); }
+
+.gold-text {
+  background: linear-gradient(115deg, var(--gold-soft) 0%, var(--gold) 45%, var(--gold-deep) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* -------------------------------- scrollbars ------------------------------- */
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gold-deep);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+/* ------------------------------- focus rings ------------------------------- */
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: rgba(212, 175, 55, 0.25);
+  color: var(--text);
+}
+
+/* --------------------------- theme cross-fade veil -------------------------- */
+
+#theme-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: var(--bg);
+  opacity: 0;
+  transition: opacity 280ms var(--ease);
+}
+#theme-veil.active { opacity: 0.92; }
+
+/* ------------------------------ reduced motion ------------------------------ */
+
+body.reduce-motion *,
+body.reduce-motion *::before,
+body.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}

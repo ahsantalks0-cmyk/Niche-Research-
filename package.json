@@ -1,0 +1,73 @@
+{
+  "name": "niche-research-department",
+  "productName": "Niche Research Department",
+  "version": "0.1.0",
+  "description": "An agentic AI research system with 35 specialist agents — discover, validate and monitor profitable niches.",
+  "author": {
+    "name": "Niche Research Department",
+    "email": "noreply@nicheresearch.app"
+  },
+  "license": "MIT",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "rebuild": "electron-builder install-app-deps",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win nsis",
+    "lint": "node scripts/lint.mjs",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "chart.js": "^4.5.1",
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "app.nicheresearch.department",
+    "productName": "Niche Research Department",
+    "copyright": "Copyright © 2026 Niche Research Department",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "__GH_OWNER__",
+      "repo": "__GH_REPO__",
+      "vPrefixedTagName": true,
+      "releaseType": "release"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icons/icon.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Niche Research Department",
+      "uninstallDisplayName": "Niche Research Department"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+name: CI Checks
+
+# Minimal quality gate: lint + headless Electron boot smoke test.
+# The full test suite lands here when the agent runtime arrives in Phase 1.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Syntax lint
+        run: npm run lint
+
+      - name: Validate build config
+        run: npx electron-builder --help > /dev/null
+
+      - name: Headless Electron smoke test
+        env:
+          NRD_SMOKE_TEST: '1'
+        run: xvfb-run -a npx electron . --no-sandbox
