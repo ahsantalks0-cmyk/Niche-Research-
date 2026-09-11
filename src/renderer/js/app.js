@@ -25,9 +25,12 @@
     $pages().innerHTML = '';
     $pages().appendChild(window.NRDPages[id].render());
 
-    document.querySelectorAll('.dock-item').forEach((n) => {
+    document.querySelectorAll('.nav-item').forEach((n) => {
       n.classList.toggle('active', n.dataset.page === id);
     });
+
+    const titleEl = document.getElementById('page-title');
+    if (titleEl) titleEl.textContent = window.NRDPages[id].title || id;
 
     const want = `#/${id}`;
     if (location.hash !== want) location.hash = want;
@@ -104,10 +107,10 @@
     });
   }
 
-  /* ----------------------------------- dock ----------------------------------- */
+  /* --------------------------------- sidebar ---------------------------------- */
 
-  function wireDock() {
-    document.querySelectorAll('.dock-item').forEach((item) => {
+  function wireSidebar() {
+    document.querySelectorAll('.nav-item').forEach((item) => {
       item.addEventListener('click', () => { location.hash = `/${item.dataset.page}`; });
     });
   }
@@ -124,7 +127,7 @@
     document.getElementById('sb-version').textContent = `v${appInfo.version}`;
 
     wireMasthead();
-    wireDock();
+    wireSidebar();
 
     window.addEventListener('hashchange', fromHash);
     fromHash();
