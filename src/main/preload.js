@@ -42,3 +42,35 @@ contextBridge.exposeInMainWorld('nrd', {
   /* platform flags */
   isMac: process.platform === 'darwin',
 });
+
+contextBridge.exposeInMainWorld('dbAPI', {
+  /* Settings */
+  getSettings: () => ipcRenderer.invoke('db:getSettings'),
+  saveSettings: (patch) => ipcRenderer.invoke('db:saveSettings', patch),
+
+  /* Countries */
+  getCountries: (activeOnly) => ipcRenderer.invoke('db:getCountries', activeOnly),
+
+  /* Runs */
+  createRun: (runData, countryCodes, criteriaBrief) =>
+    ipcRenderer.invoke('db:createRun', runData, countryCodes, criteriaBrief),
+  getRun: (runId) => ipcRenderer.invoke('db:getRun', runId),
+  updateAgentStatus: (runId, agentNumber, statusUpdate) =>
+    ipcRenderer.invoke('db:updateAgentStatus', runId, agentNumber, statusUpdate),
+
+  /* Niches */
+  getNichesByRun: (runId) => ipcRenderer.invoke('db:getNichesByRun', runId),
+
+  /* KPI & Diagnostic Health */
+  getCounts: () => ipcRenderer.invoke('db:getCounts'),
+  getDbHealth: () => ipcRenderer.invoke('db:getDbHealth'),
+
+  /* Generic CRUD */
+  insert: (table, data) => ipcRenderer.invoke('db:insert', table, data),
+  update: (table, idOrWhere, data) => ipcRenderer.invoke('db:update', table, idOrWhere, data),
+  findBy: (table, where, options) => ipcRenderer.invoke('db:findBy', table, where, options),
+  findOne: (table, where) => ipcRenderer.invoke('db:findOne', table, where),
+  deleteBy: (table, where) => ipcRenderer.invoke('db:deleteBy', table, where),
+  count: (table, where) => ipcRenderer.invoke('db:count', table, where),
+});
+

@@ -77,26 +77,26 @@
               <div class="set-row" style="padding-bottom:10px">
                 <div style="flex:1">
                   <div class="sr-title">Gemini API Key</div>
-                  <div class="sr-desc">Powers the Discovery and Deep Research layers.</div>
+                  <div class="sr-desc">Powers the Discovery and Deep Research layers (stored in app_settings).</div>
                 </div>
               </div>
               <div class="api-row">
-                <input class="input" id="key-gemini" type="password" placeholder="AIza…" disabled />
-                <button class="btn btn-outline" disabled>Paste</button>
+                <input class="input" id="key-gemini" type="password" placeholder="AIzaSy…" />
+                <button class="btn btn-outline" id="btn-paste-gemini">Paste</button>
               </div>
               <div class="set-row" style="padding-bottom:10px; margin-top:12px">
                 <div style="flex:1">
                   <div class="sr-title">Jarvis API Key</div>
-                  <div class="sr-desc">Orchestrates the Control layer and the Senior Consultant.</div>
+                  <div class="sr-desc">Orchestrates the Control layer and the Senior Consultant (stored in app_settings).</div>
                 </div>
               </div>
               <div class="api-row">
-                <input class="input" id="key-jarvis" type="password" placeholder="Paste your Jarvis key…" disabled />
-                <button class="btn btn-outline" disabled>Paste</button>
+                <input class="input" id="key-jarvis" type="password" placeholder="Enter Jarvis key…" />
+                <button class="btn btn-outline" id="btn-paste-jarvis">Paste</button>
               </div>
-              <p class="text-faint" style="font-size:11px; margin-top:12px">
-                Key entry unlocks when the agent runtime ships in Phase 1.
-              </p>
+              <div style="display:flex; justify-content:flex-end; margin-top:12px">
+                <button class="btn btn-cu" id="btn-save-keys">Save API Keys</button>
+              </div>
             </div>
           </div>
 
@@ -141,6 +141,34 @@
                 <span class="kv-v">35 agents · 5 layers</span>
               </div>
             </div>
+
+            <div class="panel panel-pad" id="panel-db-health">
+              <div class="section-label" style="display:flex; align-items:center; justify-content:space-between">
+                <span>Database Health</span>
+                <span class="badge badge-active" style="font-size:10px">SQLite WAL</span>
+              </div>
+              <div class="kv-row" style="margin-top:8px">
+                <span class="kv-k">Schema Version</span>
+                <span class="kv-v" id="dbh-version">v1 (35 agents)</span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-k">DB Size</span>
+                <span class="kv-v" id="dbh-size">…</span>
+              </div>
+              <div class="kv-row" style="flex-direction:column; align-items:flex-start; gap:4px">
+                <span class="kv-k">DB File Path (userData)</span>
+                <span class="kv-v text-mono" id="dbh-path" style="font-size:10.5px; word-break:break-all; color:var(--text-3); user-select:all">…</span>
+              </div>
+              <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+                  <span style="font-size:11.5px; font-weight:550">Table Registry (35 Tables)</span>
+                  <button class="btn btn-outline" id="btn-refresh-dbh" style="padding:4px 8px; font-size:11px">Refresh</button>
+                </div>
+                <div id="dbh-tables" style="max-height:160px; overflow-y:auto; display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:11px">
+                  <!-- Dynamic table row counts -->
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       `;
@@ -157,14 +185,23 @@
           c.classList.toggle('selected', c.dataset.theme === NRDTheme.current));
       };
       syncThemeCards();
-      themeCards.forEach((c) => c.addEventListener('click', () => NRDTheme.set(c.dataset.theme)));
+      themeCards.forEach((c) => c.addEventListener('click', () => {
+        NRDTheme.set(c.dataset.theme);
+        if (window.dbAPI) {
+          window.dbAPI.saveSettings({ theme: c.dataset.theme }).catch(() => {});
+        }
+      }));
       this._unTheme = NRDTheme.onChange(syncThemeCards);
 
-      /* toggles */
+      /* toggles & selects */
       const auto = document.getElementById('set-autoapprove');
       auto.checked = !!settings.autoApprove;
       auto.addEventListener('change', () => {
-        window.nrd.setSettings({ autoApprove: auto.checked });
+        if (window.dbAPI) {
+          window.dbAPI.saveSettings({ autoApprove: auto.checked }).catch(() => {});
+        } else if (window.nrd) {
+          window.nrd.setSettings({ autoApprove: auto.checked });
+        }
         NRDToast.show({
           type: 'success',
           title: auto.checked ? 'Approval Gate disarmed' : 'Approval Gate armed',
@@ -178,19 +215,129 @@
       reduce.checked = !!settings.reduceMotion;
       reduce.addEventListener('change', () => {
         document.body.classList.toggle('reduce-motion', reduce.checked);
-        window.nrd.setSettings({ reduceMotion: reduce.checked });
+        if (window.nrd) window.nrd.setSettings({ reduceMotion: reduce.checked });
       });
 
       const lang = document.getElementById('set-language');
       lang.value = settings.language || 'en';
       lang.addEventListener('change', () => {
-        window.nrd.setSettings({ language: lang.value });
+        if (window.dbAPI) {
+          window.dbAPI.saveSettings({ language: lang.value }).catch(() => {});
+        } else if (window.nrd) {
+          window.nrd.setSettings({ language: lang.value });
+        }
         NRDToast.show({
           type: 'info',
           title: 'Language preference saved',
-          msg: lang.value === 'ur' ? 'اردو ترجمہ Phase 2 میں آ رہا ہے' : 'English is active.',
+          msg: lang.value === 'ur' ? 'اردو ترجمہ Phase 2 میں آ رہا ہے' : 'English is active in SQLite app_settings.',
         });
       });
+
+      /* API keys elements */
+      const keyGemini = document.getElementById('key-gemini');
+      const keyJarvis = document.getElementById('key-jarvis');
+      const btnPasteGemini = document.getElementById('btn-paste-gemini');
+      const btnPasteJarvis = document.getElementById('btn-paste-jarvis');
+      const btnSaveKeys = document.getElementById('btn-save-keys');
+
+      if (btnPasteGemini) {
+        btnPasteGemini.addEventListener('click', async () => {
+          try {
+            const txt = await navigator.clipboard.readText();
+            if (txt) keyGemini.value = txt.trim();
+          } catch {
+            NRDToast.show({ type: 'warning', title: 'Clipboard unavailable', msg: 'Please paste manually into the field.' });
+          }
+        });
+      }
+
+      if (btnPasteJarvis) {
+        btnPasteJarvis.addEventListener('click', async () => {
+          try {
+            const txt = await navigator.clipboard.readText();
+            if (txt) keyJarvis.value = txt.trim();
+          } catch {
+            NRDToast.show({ type: 'warning', title: 'Clipboard unavailable', msg: 'Please paste manually into the field.' });
+          }
+        });
+      }
+
+      if (btnSaveKeys) {
+        btnSaveKeys.addEventListener('click', async () => {
+          if (!window.dbAPI) return;
+          btnSaveKeys.disabled = true;
+          try {
+            await window.dbAPI.saveSettings({
+              geminiApiKey: keyGemini.value.trim(),
+              jarvisApiKey: keyJarvis.value.trim(),
+            });
+            NRDToast.show({
+              type: 'success',
+              title: 'API credentials saved',
+              msg: 'Persisted securely into SQLite app_settings table.',
+            });
+          } catch (err) {
+            NRDToast.show({ type: 'error', title: 'Save failed', msg: err.message });
+          } finally {
+            btnSaveKeys.disabled = false;
+          }
+        });
+      }
+
+      /* Load initial values from SQLite app_settings */
+      if (window.dbAPI) {
+        window.dbAPI.getSettings().then((dbSet) => {
+          if (!dbSet) return;
+          if (dbSet.theme) {
+            NRDTheme.set(dbSet.theme);
+            syncThemeCards();
+          }
+          if (auto) auto.checked = !!dbSet.autoApprove;
+          if (lang) lang.value = dbSet.language || 'en';
+          if (keyGemini && dbSet.geminiApiKey) keyGemini.value = dbSet.geminiApiKey;
+          if (keyJarvis && dbSet.jarvisApiKey) keyJarvis.value = dbSet.jarvisApiKey;
+        }).catch(() => {});
+      }
+
+      /* DB Health loader */
+      const renderDbHealth = async () => {
+        if (!window.dbAPI) return;
+        try {
+          const health = await window.dbAPI.getDbHealth();
+          if (!health) return;
+          const vEl = document.getElementById('dbh-version');
+          const sEl = document.getElementById('dbh-size');
+          const pEl = document.getElementById('dbh-path');
+          const tEl = document.getElementById('dbh-tables');
+
+          if (vEl) vEl.textContent = `v${health.schemaVersion} (35 agents)`;
+          if (sEl) sEl.textContent = `${(health.dbSizeBytes / 1024).toFixed(1)} KB (WAL mode active)`;
+          if (pEl) pEl.textContent = health.dbPath || 'app.getPath("userData")/niche_research.db';
+
+          if (tEl && health.tables) {
+            tEl.innerHTML = Object.entries(health.tables).map(([tbl, cnt]) => `
+              <div style="background:var(--bg-3); padding:4px 6px; border-radius:4px; border:1px solid var(--border); display:flex; justify-content:space-between">
+                <span class="text-mono" style="font-size:10px; color:var(--text-2)">${tbl}</span>
+                <span class="badge ${cnt > 0 ? 'badge-active' : ''}" style="font-size:9.5px; padding:1px 5px">${cnt}</span>
+              </div>
+            `).join('');
+          }
+        } catch {
+          // DB health fetch silent fallback
+        }
+      };
+
+      renderDbHealth();
+      const btnRefreshDbh = document.getElementById('btn-refresh-dbh');
+      if (btnRefreshDbh) {
+        btnRefreshDbh.addEventListener('click', () => {
+          btnRefreshDbh.disabled = true;
+          renderDbHealth().finally(() => {
+            btnRefreshDbh.disabled = false;
+            NRDToast.show({ type: 'info', title: 'Database diagnostics refreshed', msg: 'All 35 table row counts updated.' });
+          });
+        });
+      }
 
       /* about */
       window.nrd.init().then((info) => {

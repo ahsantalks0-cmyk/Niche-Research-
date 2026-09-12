@@ -1,7 +1,7 @@
 {
   "name": "niche-research-department",
   "productName": "Niche Research Department",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "description": "An agentic AI research system with 35 specialist agents — discover, validate and monitor profitable niches.",
   "author": {
     "name": "Niche Research Department",
@@ -10,17 +10,20 @@
   "license": "MIT",
   "main": "src/main/main.js",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron .",
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build": "echo 'No build needed'",
+    "test": "node scripts/test-db.js",
+    "lint": "node scripts/lint.mjs",
     "rebuild": "electron-builder install-app-deps",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
-    "dist:win": "electron-builder --win nsis",
-    "lint": "node scripts/lint.mjs",
-    "postinstall": "electron-builder install-app-deps"
+    "dist:win": "electron-builder --win nsis"
   },
   "dependencies": {
-    "electron-updater": "^6.8.9"
+    "better-sqlite3": "^13.0.3",
+    "electron-updater": "^6.8.9",
+    "express": "^4.21.2"
   },
   "devDependencies": {
     "chart.js": "^4.5.1",

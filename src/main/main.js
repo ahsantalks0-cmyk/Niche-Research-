@@ -12,6 +12,8 @@ const path = require('node:path');
 const { config } = require('./config');
 const store = require('./store');
 const updater = require('./updater');
+const db = require('./db');
+const { registerDbIpc } = require('./ipc');
 
 /* ------------------------- app identity & hardening ------------------------- */
 
@@ -151,7 +153,16 @@ ipcMain.on('dialog:showMessage', (_e, opts) => {
 /* ------------------------------- app lifecycle ------------------------------ */
 
 app.whenReady().then(() => {
-  const savedTheme = store.get('theme', 'dark');
+  // Initialize SQLite database and register IPC handlers
+  try {
+    db.getDb();
+    registerDbIpc();
+  } catch (err) {
+    console.error('[db] Failed to initialize SQLite database:', err);
+  }
+
+  const dbSettings = db.getSettings();
+  const savedTheme = dbSettings ? dbSettings.theme : store.get('theme', 'dark');
   nativeTheme.themeSource = savedTheme === 'light' ? 'light' : 'dark';
   createWindow();
   // Silent update check ~2.5s after launch, so it never blocks first paint.

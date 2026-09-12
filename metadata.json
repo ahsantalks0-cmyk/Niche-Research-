@@ -1,0 +1,6 @@
+{
+  "name": "Niche Research Department",
+  "description": "Agentic AI research system with 35 specialist agents, complete SQLite database schema, and live intelligence dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

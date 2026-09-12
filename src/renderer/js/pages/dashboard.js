@@ -8,10 +8,10 @@
   window.NRDPages = window.NRDPages || {};
 
   const KPIS = [
-    { id: 'niches', label: 'Niches Researched', value: 1284, delta: '+12.4% this month', spark: [8, 12, 10, 16, 14, 22, 19, 26, 24, 32, 30, 38] },
-    { id: 'runs', label: 'Active Runs', value: 4, delta: '+3 today', spark: [2, 3, 2, 4, 3, 5, 4, 3, 4, 6, 5, 4] },
-    { id: 'reports', label: 'Reports Generated', value: 342, delta: '+8 this week', spark: [4, 6, 5, 9, 8, 12, 10, 14, 13, 17, 16, 21] },
-    { id: 'countries', label: 'Countries Covered', value: 26, delta: '+2 new', spark: [10, 12, 11, 14, 16, 15, 18, 20, 19, 22, 24, 26] },
+    { id: 'niches', label: 'Niches Researched', value: 0, delta: '0 in database', spark: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { id: 'runs', label: 'Active Runs', value: 0, delta: '0 in database', spark: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { id: 'reports', label: 'Reports Generated', value: 0, delta: '0 in database', spark: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    { id: 'countries', label: 'Countries Covered', value: 0, delta: '30 seeded', spark: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 30] },
   ];
 
   const RUNS = [
@@ -179,10 +179,34 @@
         requestAnimationFrame(tick);
       };
 
-      KPIS.forEach((k) => {
-        const cell = document.getElementById(`kpi-${k.id}`);
-        if (cell) countUp(cell.querySelector('.lc-value'), k.value);
-      });
+      const animateKpis = (counts) => {
+        const kpiMap = {
+          niches: { val: counts ? counts.niches : 0, delta: counts && counts.niches > 0 ? `+${counts.niches} total` : '0 in database' },
+          runs: { val: counts ? counts.runs : 0, delta: counts && counts.runs > 0 ? `${counts.runs} executed` : '0 in database' },
+          reports: { val: counts ? counts.reports : 0, delta: counts && counts.reports > 0 ? `${counts.reports} ready` : '0 in database' },
+          countries: { val: counts ? counts.countries : 30, delta: counts && counts.countries > 0 ? `${counts.countries} active` : '30 seeded' },
+        };
+
+        KPIS.forEach((k) => {
+          const cell = document.getElementById(`kpi-${k.id}`);
+          if (cell) {
+            const data = kpiMap[k.id] || { val: 0, delta: '0 in database' };
+            countUp(cell.querySelector('.lc-value'), data.val);
+            const deltaEl = cell.querySelector('.lc-delta');
+            if (deltaEl) deltaEl.textContent = data.delta;
+          }
+        });
+      };
+
+      if (window.dbAPI && typeof window.dbAPI.getCounts === 'function') {
+        window.dbAPI.getCounts().then((counts) => {
+          animateKpis(counts);
+        }).catch(() => {
+          animateKpis(null);
+        });
+      } else {
+        animateKpis(null);
+      }
 
       const labels14 = Array.from({ length: 14 }, (_, i) => {
         const d = new Date(Date.now() - (13 - i) * 86400000);
