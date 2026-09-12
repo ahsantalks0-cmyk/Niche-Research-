@@ -2235,6 +2235,128 @@ textarea.input { height: auto; min-height: 96px; padding: 12px 14px; resize: non
   border: 1px solid var(--line);
 }
 
+/* ═════════════════════════════ ENGINE TEST SECTION (Part 7) ═════════════════════════════ */
+
+.engine-test-panel {
+  grid-column: 1 / -1;
+  margin-top: 14px;
+}
+
+.engine-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--ink-950);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+
+.engine-slots-live {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.engine-slot-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--ink-900);
+  font-size: 11.5px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-2);
+}
+
+.engine-slot-pill .pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6B7280;
+}
+
+.engine-slot-pill.active {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(59, 130, 246, 0.1);
+  color: #93C5FD;
+}
+
+.engine-slot-pill.active .pill-dot {
+  background: #3B82F6;
+  box-shadow: 0 0 8px #3B82F6;
+}
+
+.engine-slot-pill.paused_captcha {
+  border-color: rgba(239, 68, 68, 0.6);
+  background: rgba(239, 68, 68, 0.15);
+  color: #FCA5A5;
+}
+
+.engine-slot-pill.paused_captcha .pill-dot {
+  background: #EF4444;
+  box-shadow: 0 0 10px #EF4444;
+}
+
+.engine-test-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.engine-test-card {
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--ink-900);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all var(--t-fast) var(--ease);
+}
+
+.engine-test-card:hover {
+  border-color: var(--line-cu);
+  background: var(--ink-850, #131317);
+}
+
+.etc-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.etc-desc {
+  font-size: 11.5px;
+  color: var(--text-3);
+  line-height: 1.4;
+  flex: 1;
+}
+
+.engine-test-console {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #08080A;
+  border: 1px solid var(--line);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #9CA3AF;
+  max-height: 220px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* =============================== responsive ================================= */
 
 @media (max-width: 1240px) {

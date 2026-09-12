@@ -13,7 +13,8 @@ const { config } = require('./config');
 const store = require('./store');
 const updater = require('./updater');
 const db = require('./db');
-const { registerDbIpc } = require('./ipc');
+const { registerDbIpc, registerEngineIpc } = require('./ipc');
+const { browserEngine } = require('./engine');
 
 /* ------------------------- app identity & hardening ------------------------- */
 
@@ -165,6 +166,7 @@ app.whenReady().then(() => {
   const savedTheme = dbSettings ? dbSettings.theme : store.get('theme', 'dark');
   nativeTheme.themeSource = savedTheme === 'light' ? 'light' : 'dark';
   createWindow();
+  registerEngineIpc(mainWindow);
   // Silent update check ~2.5s after launch, so it never blocks first paint.
   setTimeout(() => updater.checkOnStart(), 2500);
 
@@ -187,4 +189,8 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+  browserEngine.close().catch(() => {});
 });

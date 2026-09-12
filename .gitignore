@@ -37,3 +37,9 @@ scripts/tmp-font/
 *.db-shm
 niche_research.db
 
+# Browser Engine profiles & screenshots (isolation & persistent context)
+.browser-profile/
+.browser-profile*/
+screenshots/
+**/screenshots/
+

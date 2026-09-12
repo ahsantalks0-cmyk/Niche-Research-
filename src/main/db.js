@@ -11,9 +11,11 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 
 const migrationV1 = require('./migrations/v1');
+const migrationV2 = require('./migrations/v2');
 
 const MIGRATIONS = [
   migrationV1,
+  migrationV2,
 ];
 
 let _db = null;
@@ -329,11 +331,25 @@ function getSettings() {
     theme: row.theme,
     language: row.language,
     autoApprove: !!row.auto_approve,
+    auto_approve: !!row.auto_approve,
     geminiApiKey: row.gemini_api_key || '',
+    gemini_api_key: row.gemini_api_key || '',
     jarvisApiKey: row.jarvis_api_key || '',
+    jarvis_api_key: row.jarvis_api_key || '',
     whiteLabelBrand: row.white_label_brand || '',
+    white_label_brand: row.white_label_brand || '',
     lastUpdateCheck: row.last_update_check || null,
+    last_update_check: row.last_update_check || null,
     schemaVersion: row.schema_version,
+    schema_version: row.schema_version,
+    browserSlots: row.browser_slots !== undefined ? Number(row.browser_slots) : 3,
+    browser_slots: row.browser_slots !== undefined ? Number(row.browser_slots) : 3,
+    cacheTtlHours: row.cache_ttl_hours !== undefined ? Number(row.cache_ttl_hours) : 24,
+    cache_ttl_hours: row.cache_ttl_hours !== undefined ? Number(row.cache_ttl_hours) : 24,
+    rateLimitGooglePerMin: row.rate_limit_google_per_min !== undefined ? Number(row.rate_limit_google_per_min) : 8,
+    rate_limit_google_per_min: row.rate_limit_google_per_min !== undefined ? Number(row.rate_limit_google_per_min) : 8,
+    maxRetries: row.max_retries !== undefined ? Number(row.max_retries) : 3,
+    max_retries: row.max_retries !== undefined ? Number(row.max_retries) : 3,
   };
 }
 
@@ -348,10 +364,23 @@ function saveSettings(patch = {}) {
     theme: 'theme',
     language: 'language',
     autoApprove: 'auto_approve',
+    auto_approve: 'auto_approve',
     geminiApiKey: 'gemini_api_key',
+    gemini_api_key: 'gemini_api_key',
     jarvisApiKey: 'jarvis_api_key',
+    jarvis_api_key: 'jarvis_api_key',
     whiteLabelBrand: 'white_label_brand',
+    white_label_brand: 'white_label_brand',
     lastUpdateCheck: 'last_update_check',
+    last_update_check: 'last_update_check',
+    browserSlots: 'browser_slots',
+    browser_slots: 'browser_slots',
+    cacheTtlHours: 'cache_ttl_hours',
+    cache_ttl_hours: 'cache_ttl_hours',
+    rateLimitGooglePerMin: 'rate_limit_google_per_min',
+    rate_limit_google_per_min: 'rate_limit_google_per_min',
+    maxRetries: 'max_retries',
+    max_retries: 'max_retries',
   };
 
   const fields = {};
@@ -638,7 +667,7 @@ function getDbHealth() {
     'geo_localization', 'domain_brand', 'country_benchmarks', 'opportunity_scores',
     'final_verdicts', 'risk_flags', 'qa_checks', 'reports', 'seo_handoff_packages',
     're_research_log', 'scheduler_jobs', 'chat_messages', 'jarvis_requests',
-    'app_settings', 'schema_migrations',
+    'app_settings', 'schema_migrations', 'page_cache', 'timing_logs',
   ];
 
   const tableCounts = {};
@@ -656,6 +685,250 @@ function getDbHealth() {
     dbSizeBytes,
     tables: tableCounts,
   };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PILLAR 1: SHARED PAGE / DATA CACHE ENGINE
+   ══════════════════════════════════════════════════════════════ */
+
+/**
+ * Retrieves unexpired cached data by key.
+ * Increments hit_count if found and still valid.
+ * @param {string} cacheKey
+ * @returns {Record<string, any> | null}
+ */
+function cacheGet(cacheKey) {
+  const db = getDb();
+  const row = db.prepare(`
+    SELECT * FROM page_cache
+    WHERE cache_key = ? AND datetime(expires_at) > datetime('now')
+  `).get(cacheKey);
+
+  if (!row) return null;
+
+  // Increment hit count
+  try {
+    db.prepare(`UPDATE page_cache SET hit_count = hit_count + 1 WHERE id = ?`).run(row.id);
+  } catch {
+    // Non-fatal
+  }
+
+  let parsedData = null;
+  try {
+    parsedData = JSON.parse(row.data_json);
+  } catch {
+    parsedData = row.data_json;
+  }
+
+  return {
+    id: row.id,
+    cacheKey: row.cache_key,
+    nicheRef: row.niche_ref,
+    keyword: row.keyword,
+    countryCode: row.country_code,
+    data: parsedData,
+    rawHtmlPath: row.raw_html_path,
+    fetchedAt: row.fetched_at,
+    expiresAt: row.expires_at,
+    hitCount: row.hit_count + 1,
+  };
+}
+
+/**
+ * Stores data in the shared page/data cache with a specified TTL.
+ * @param {object} params
+ * @param {string} params.cacheKey
+ * @param {string} [params.nicheRef]
+ * @param {string} params.keyword
+ * @param {string} params.countryCode
+ * @param {any} params.data
+ * @param {string} [params.rawHtmlPath]
+ * @param {number} [params.ttlHours=24]
+ * @returns {object}
+ */
+function cacheSet({ cacheKey, nicheRef = null, keyword, countryCode, data, rawHtmlPath = null, ttlHours = 24 }) {
+  const db = getDb();
+  const dataJson = typeof data === 'string' ? data : JSON.stringify(data);
+  const ttl = Number(ttlHours) || 24;
+
+  const stmt = db.prepare(`
+    INSERT INTO page_cache (
+      cache_key, niche_ref, keyword, country_code, data_json,
+      raw_html_path, fetched_at, expires_at, hit_count
+    ) VALUES (
+      ?, ?, ?, ?, ?,
+      ?, datetime('now'), datetime('now', '+' || ? || ' hours'), 0
+    )
+    ON CONFLICT(cache_key) DO UPDATE SET
+      niche_ref = excluded.niche_ref,
+      data_json = excluded.data_json,
+      raw_html_path = excluded.raw_html_path,
+      fetched_at = datetime('now'),
+      expires_at = datetime('now', '+' || ? || ' hours');
+  `);
+
+  stmt.run(cacheKey, nicheRef, keyword, countryCode, dataJson, rawHtmlPath, ttl, ttl);
+  return { cacheKey, keyword, countryCode, ttlHours: ttl };
+}
+
+/**
+ * Deletes a specific cache entry.
+ * @param {string} cacheKey
+ */
+function cacheDelete(cacheKey) {
+  const db = getDb();
+  return db.prepare('DELETE FROM page_cache WHERE cache_key = ?').run(cacheKey);
+}
+
+/**
+ * Prunes all expired cache records.
+ * @returns {number} Number of pruned rows
+ */
+function cachePruneExpired() {
+  const db = getDb();
+  const info = db.prepare(`DELETE FROM page_cache WHERE datetime(expires_at) <= datetime('now')`).run();
+  return info.changes;
+}
+
+/**
+ * Returns cache telemetry statistics.
+ * @returns {{ totalEntries: number, totalHits: number, activeEntries: number }}
+ */
+function cacheStats() {
+  const db = getDb();
+  const stats = db.prepare(`
+    SELECT
+      COUNT(*) as total_entries,
+      COALESCE(SUM(hit_count), 0) as total_hits,
+      SUM(CASE WHEN datetime(expires_at) > datetime('now') THEN 1 ELSE 0 END) as active_entries
+    FROM page_cache
+  `).get();
+
+  return {
+    totalEntries: stats ? stats.total_entries : 0,
+    totalHits: stats ? stats.total_hits : 0,
+    activeEntries: stats ? (stats.active_entries || 0) : 0,
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PILLAR 7: TIMING INSTRUMENTATION & SUMMARY ENGINE
+   ══════════════════════════════════════════════════════════════ */
+
+/**
+ * Logs a timed operation into timing_logs.
+ * @param {object} log
+ */
+function logTiming(log) {
+  const db = getDb();
+  let runId = log.runId || null;
+  if (runId) {
+    const existing = db.prepare('SELECT id FROM research_runs WHERE id = ?').get(runId);
+    if (!existing) runId = null;
+  }
+
+  const stmt = db.prepare(`
+    INSERT INTO timing_logs (
+      run_id, task_ref, agent_number, operation, started_at,
+      ended_at, duration_ms, cache_hit, rate_limit_wait_ms, captcha_encountered
+    ) VALUES (
+      ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?
+    )
+  `);
+
+  const info = stmt.run(
+    runId,
+    log.taskRef || 'task',
+    log.agentNumber || null,
+    log.operation || 'browser_op',
+    log.startedAt || new Date().toISOString(),
+    log.endedAt || new Date().toISOString(),
+    Math.round(log.durationMs || 0),
+    log.cacheHit ? 1 : 0,
+    Math.round(log.rateLimitWaitMs || 0),
+    log.captchaEncountered ? 1 : 0
+  );
+
+  return info.lastInsertRowid;
+}
+
+/**
+ * Aggregates a timing summary for a specific run (or all recent runs).
+ * @param {number} [runId]
+ * @returns {object} Timing summary
+ */
+function getTimingSummary(runId = null) {
+  const db = getDb();
+  let where = '';
+  const params = [];
+
+  if (runId) {
+    where = 'WHERE run_id = ?';
+    params.push(runId);
+  }
+
+  const totals = db.prepare(`
+    SELECT
+      COUNT(*) as total_ops,
+      COALESCE(SUM(duration_ms), 0) as total_duration_ms,
+      COALESCE(SUM(CASE WHEN cache_hit = 1 THEN 1 ELSE 0 END), 0) as cache_hits,
+      COALESCE(SUM(rate_limit_wait_ms), 0) as total_rate_limit_wait_ms,
+      COALESCE(SUM(CASE WHEN rate_limit_wait_ms > 0 THEN 1 ELSE 0 END), 0) as rate_limit_waits_count,
+      COALESCE(SUM(CASE WHEN captcha_encountered = 1 THEN 1 ELSE 0 END), 0) as captcha_count
+    FROM timing_logs
+    ${where}
+  `).get(...params);
+
+  const breakdown = db.prepare(`
+    SELECT
+      operation,
+      COUNT(*) as count,
+      SUM(duration_ms) as total_ms,
+      ROUND(AVG(duration_ms), 1) as avg_ms,
+      SUM(cache_hit) as cache_hits,
+      SUM(rate_limit_wait_ms) as total_wait_ms
+    FROM timing_logs
+    ${where}
+    GROUP BY operation
+    ORDER BY total_ms DESC
+  `).all(...params);
+
+  return {
+    runId,
+    totalOperations: totals ? totals.total_ops : 0,
+    totalDurationMs: totals ? totals.total_duration_ms : 0,
+    cacheHits: totals ? totals.cache_hits : 0,
+    cacheHitRatePct: totals && totals.total_ops > 0 ? Math.round((totals.cache_hits / totals.total_ops) * 100) : 0,
+    totalRateLimitWaitMs: totals ? totals.total_rate_limit_wait_ms : 0,
+    rateLimitWaitsCount: totals ? totals.rate_limit_waits_count : 0,
+    captchaCount: totals ? totals.captcha_count : 0,
+    breakdown,
+  };
+}
+
+/**
+ * Returns recent timing log rows.
+ * @param {object} [options]
+ * @param {number} [options.limit=50]
+ * @param {number} [options.runId]
+ * @returns {Array<object>}
+ */
+function getTimingLogs(options = {}) {
+  const db = getDb();
+  const limit = Math.min(Number(options.limit) || 50, 500);
+  let sql = 'SELECT * FROM timing_logs';
+  const params = [];
+
+  if (options.runId) {
+    sql += ' WHERE run_id = ?';
+    params.push(options.runId);
+  }
+
+  sql += ' ORDER BY id DESC LIMIT ?';
+  params.push(limit);
+
+  return db.prepare(sql).all(...params);
 }
 
 module.exports = {
@@ -679,4 +952,12 @@ module.exports = {
   getNichesByRun,
   getCounts,
   getDbHealth,
+  cacheGet,
+  cacheSet,
+  cacheDelete,
+  cachePruneExpired,
+  cacheStats,
+  logTiming,
+  getTimingSummary,
+  getTimingLogs,
 };

@@ -82,9 +82,46 @@ context; for local builds set `NRD_GH_OWNER` / `NRD_GH_REPO` or edit
 | Phase | Scope |
 |-------|-------|
 | P0.1 ✅ | Electron foundation, premium UI, auto-updater, CI/CD |
+| P0.3 ✅ | SQLite database engine with 37 tables, 30 seeded countries, WAL mode |
+| P0.4 ✅ | Multi-country system & 4-input mode research initiator |
+| P0.5 ✅ | High-speed Browser Engine (Real Chrome, 7-Pillar Speed Architecture, CAPTCHA Safety Net, Process Isolation, Live Logs) |
 | P1+ | 35-agent runtime: Discovery & Deep Research layers, Approval Gate |
 | P2 | Senior Consultant chat, multi-language (English/Urdu), report engine |
+
+---
+
+## ⚡ Browser Engine Architecture (Phase 0.5)
+
+The **Niche Research Department Browser Engine** is a high-speed, anti-detection web automation layer designed to deliver deep research without compromise in **under 15–20 minutes per niche**.
+
+### 🛡 Real Chrome & Anti-Detection
+- **Real Installed Chrome**: Launches with `channel: "chrome"`, using the authentic system Google Chrome binary.
+- **Persistent Profile**: Operates with `launchPersistentContext` in an isolated directory (`.browser-profile`). Google trust tokens (`NID`/`SOCS`) persist across runs.
+- **Authentic Headers**: Never injects fake User-Agents. Real Chrome communicates authentic `navigator.userAgentData` values.
+- **Human Behavior v2 (`human.js`)**: Implements human keystroke cadence (burst typing), randomized realistic typo corrections (4% typo rate), thinking pauses, reading pauses during scrolling, and micro-mouse movement drifts.
+
+### 🏛 The 7 Pillars of Speed
+1. **Shared Page/Data Cache**: Cross-mode & cross-agent SERP/page cache in SQLite (`page_cache` table). Subsequent agents or business modes accessing identical `(keyword, country)` resolve in `<5ms`, eliminating duplicate network fetches.
+2. **3-Slot Concurrency Pool**: True parallel execution across 3 independent browser contexts with overlapping task dispatches.
+3. **Global Per-Domain Rate Limiter**: Process-wide token bucket prevents IP-level bot triggers across all slots and tabs (e.g. `google.com` capped at 8 req/min).
+4. **Right-Sized Consolidated Delays**: Replaces stacked delay chains with single, randomized human pauses. Direct HTTP queries (RDAP, Wayback) bypass browser overhead entirely.
+5. **Parallel Gemini Calls**: `geminiBatch` handles independent AI inference tasks concurrently via `Promise.all` with chunking and backoff.
+6. **Multi-Country Tabs**: Multi-region niche queries run simultaneously across dedicated tabs governed by global rate limiting.
+7. **Timing Instrumentation**: Every operation records millisecond-precision timestamps in `timing_logs` table, calculating aggregate duration and time saved via caching.
+
+### 🔔 CAPTCHA Safety Net
+- Detects Google "unusual traffic" challenges in real-time.
+- Displays an alert banner at the top of the interface and plays a chime sound (`assets/sounds/captcha-alert.mp3`).
+- Pauses only the affected browser slot while other slots continue parallel operations. Resumes automatically when resolved.
+
+### 🔒 Multi-Department Browser Isolation Contract
+- **Dedicated Directory**: Utilizes an isolated profile directory (`userData/.browser-profile`) with zero shared state.
+- **Zero External Touch**: Tracks only engine-created contexts and pages via internal `WeakSet` registries (`OWNED_CONTEXTS`, `OWNED_PAGES`).
+- **Never Kills External Browsers**: Never sends kill/close signals to external processes or user Chrome instances. Gracefully creates fallback profiles if a lock occurs.
+
+---
 
 ## 📄 License
 
 MIT
+

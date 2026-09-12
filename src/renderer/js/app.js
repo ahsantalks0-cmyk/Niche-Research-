@@ -105,6 +105,50 @@
       const go = e.target.closest('[data-goto]');
       if (go) location.hash = `/${go.dataset.goto}`;
     });
+
+    // Window controls (frameless title bar - Part 1)
+    const minBtn = document.getElementById('btn-win-min');
+    const maxBtn = document.getElementById('btn-win-max');
+    const closeBtn = document.getElementById('btn-win-close');
+
+    if (minBtn) {
+      minBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.nrd && window.nrd.minimize) window.nrd.minimize();
+      });
+    }
+
+    if (maxBtn) {
+      maxBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.nrd && window.nrd.toggleMaximize) window.nrd.toggleMaximize();
+      });
+    }
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.nrd && window.nrd.closeWindow) window.nrd.closeWindow();
+      });
+    }
+
+    if (window.nrd && window.nrd.onWindowFlags) {
+      window.nrd.onWindowFlags(({ maximized }) => {
+        if (maxBtn) {
+          const icMax = maxBtn.querySelector('.ic-maximize');
+          const icRestore = maxBtn.querySelector('.ic-restore');
+          if (icMax && icRestore) {
+            icMax.style.display = maximized ? 'none' : 'block';
+            icRestore.style.display = maximized ? 'block' : 'none';
+          }
+          maxBtn.title = maximized ? 'Restore' : 'Maximize';
+          maxBtn.setAttribute('aria-label', maximized ? 'Restore' : 'Maximize');
+        }
+      });
+    }
   }
 
   /* --------------------------------- sidebar ---------------------------------- */
@@ -128,6 +172,10 @@
 
     wireMasthead();
     wireSidebar();
+
+    // Initialize Engine Real-time UI controllers (Part 4, 6)
+    if (window.NRDLiveLogs) window.NRDLiveLogs.init();
+    if (window.NRDCaptchaBanner) window.NRDCaptchaBanner.init();
 
     window.addEventListener('hashchange', fromHash);
     fromHash();

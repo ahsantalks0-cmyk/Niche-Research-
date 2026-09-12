@@ -161,7 +161,7 @@
               </div>
               <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
-                  <span style="font-size:11.5px; font-weight:550">Table Registry (35 Tables)</span>
+                  <span style="font-size:11.5px; font-weight:550">Table Registry (37 Tables)</span>
                   <button class="btn btn-outline" id="btn-refresh-dbh" style="padding:4px 8px; font-size:11px">Refresh</button>
                 </div>
                 <div id="dbh-tables" style="max-height:160px; overflow-y:auto; display:grid; grid-template-columns:1fr 1fr; gap:6px; font-size:11px">
@@ -169,6 +169,128 @@
                 </div>
               </div>
             </div>
+          </div>
+
+          <!-- ═══════════════ Engine Architecture & Test Harness (Part 7) ═══════════════ -->
+          <div class="panel panel-pad engine-test-panel">
+            <div class="section-label" style="display:flex; align-items:center; justify-content:space-between">
+              <span>Browser Engine Architecture &amp; Test Suite</span>
+              <div style="display:flex; gap:8px">
+                <button class="btn btn-outline" id="btn-engine-logs" style="padding:4px 10px; font-size:11.5px">
+                  Open Engine Terminal
+                </button>
+                <button class="btn btn-outline" id="btn-engine-prune" style="padding:4px 10px; font-size:11.5px">
+                  Prune Cache
+                </button>
+              </div>
+            </div>
+
+            <div class="engine-status-bar">
+              <div class="engine-slots-live" id="engine-slots-live">
+                <div class="engine-slot-pill" id="esp-1"><span class="pill-dot"></span> <span>Slot #1: IDLE</span></div>
+                <div class="engine-slot-pill" id="esp-2"><span class="pill-dot"></span> <span>Slot #2: IDLE</span></div>
+                <div class="engine-slot-pill" id="esp-3"><span class="pill-dot"></span> <span>Slot #3: IDLE</span></div>
+              </div>
+              <div style="font-size:11.5px; color:var(--text-3); font-family:var(--font-mono, monospace)" id="engine-cache-status">
+                Cache: 0 items · 0 hits
+              </div>
+            </div>
+
+            <div class="engine-test-cards">
+              <div class="engine-test-card">
+                <div class="etc-title">
+                  <span>1. Real Chrome Launch</span>
+                  <span class="badge" style="font-size:9.5px">Pillar 2</span>
+                </div>
+                <div class="etc-desc">
+                  Launches installed Google Chrome (channel: 'chrome') with warm user profile and human viewport.
+                </div>
+                <button class="btn btn-cu btn-sm" id="btn-test-chrome" style="width:100%; margin-top:auto">
+                  Run Test
+                </button>
+              </div>
+
+              <div class="engine-test-card">
+                <div class="etc-title">
+                  <span>2. 3-Slot Concurrency</span>
+                  <span class="badge" style="font-size:9.5px">Pillar 2</span>
+                </div>
+                <div class="etc-desc">
+                  Dispatches 3 simultaneous searches across parallel browser slots with overlapping timestamps.
+                </div>
+                <button class="btn btn-cu btn-sm" id="btn-test-slots" style="width:100%; margin-top:auto">
+                  Run Test
+                </button>
+              </div>
+
+              <div class="engine-test-card">
+                <div class="etc-title">
+                  <span>3. Cache Hit vs Miss</span>
+                  <span class="badge" style="font-size:9.5px">Pillar 1</span>
+                </div>
+                <div class="etc-desc">
+                  Validates persistent SQLite page cache. First search is a miss, second search resolves in &lt;5ms.
+                </div>
+                <button class="btn btn-cu btn-sm" id="btn-test-cache" style="width:100%; margin-top:auto">
+                  Run Test
+                </button>
+              </div>
+
+              <div class="engine-test-card">
+                <div class="etc-title">
+                  <span>4. Rate Limiter</span>
+                  <span class="badge" style="font-size:9.5px">Pillar 3</span>
+                </div>
+                <div class="etc-desc">
+                  Fires rapid Google requests to demonstrate token bucket throttling and queueing.
+                </div>
+                <button class="btn btn-cu btn-sm" id="btn-test-ratelimit" style="width:100%; margin-top:auto">
+                  Run Test
+                </button>
+              </div>
+
+              <div class="engine-test-card">
+                <div class="etc-title">
+                  <span>5. CAPTCHA Safety Net</span>
+                  <span class="badge" style="font-size:9.5px">Part 4</span>
+                </div>
+                <div class="etc-desc">
+                  Simulates CAPTCHA detection to verify chime sound, persistent sticky banner, and slot pause.
+                </div>
+                <button class="btn btn-cu btn-sm" id="btn-test-captcha" style="width:100%; margin-top:auto">
+                  Run Test
+                </button>
+              </div>
+
+              <div class="engine-test-card">
+                <div class="etc-title">
+                  <span>6. Timing Breakdown</span>
+                  <span class="badge" style="font-size:9.5px">Pillar 7</span>
+                </div>
+                <div class="etc-desc">
+                  Retrieves aggregated timing metrics, cache hit savings, and phase durations.
+                </div>
+                <button class="btn btn-cu btn-sm" id="btn-test-timing" style="width:100%; margin-top:auto">
+                  Run Test
+                </button>
+              </div>
+
+              <div class="engine-test-card">
+                <div class="etc-title">
+                  <span>7. Browser Isolation</span>
+                  <span class="badge" style="font-size:9.5px">Part 5</span>
+                </div>
+                <div class="etc-desc">
+                  Verifies isolated user profiles, PID tracking, and zero touch of existing user tabs.
+                </div>
+                <button class="btn btn-cu btn-sm" id="btn-test-isolation" style="width:100%; margin-top:auto">
+                  Run Test
+                </button>
+              </div>
+            </div>
+
+            <div style="font-size:11.5px; font-weight:600; color:var(--text-2); margin-bottom:6px">Test Output Console</div>
+            <div class="engine-test-console" id="engine-test-console">Click any test button above to run harness verification…</div>
           </div>
         </div>
       `;
@@ -415,11 +537,114 @@
 
       renderUpdate(NRDUpdaterUI.lastState);
       this._unUpdater = window.nrd.onUpdaterState(renderUpdate);
+
+      /* ═══════════════ Engine Test Harness & Telemetry (Part 7) ═══════════════ */
+      const consoleEl = document.getElementById('engine-test-console');
+      const logToConsole = (msg) => {
+        if (!consoleEl) return;
+        const ts = new Date().toTimeString().split(' ')[0];
+        consoleEl.textContent = `[${ts}] ${msg}\n\n` + consoleEl.textContent;
+      };
+
+      const updateSlotPills = (slots) => {
+        if (!Array.isArray(slots)) return;
+        slots.forEach((s) => {
+          const pill = document.getElementById(`esp-${s.id}`);
+          if (!pill) return;
+          pill.className = `engine-slot-pill ${s.status}`;
+          const label = pill.querySelector('span:last-child');
+          if (label) {
+            label.textContent = `Slot #${s.id}: ${s.status.toUpperCase()}${s.currentDomain ? ' (' + s.currentDomain + ')' : ''}`;
+          }
+        });
+      };
+
+      const refreshEngineCache = async () => {
+        if (!window.engineAPI) return;
+        try {
+          const stats = await window.engineAPI.getCacheStats();
+          const el = document.getElementById('engine-cache-status');
+          if (el && stats) {
+            el.textContent = `Cache: ${stats.totalEntries} entries · ${stats.totalHits} hits · ${((stats.totalSizeBytes || 0) / 1024).toFixed(1)} KB`;
+          }
+        } catch {}
+      };
+
+      // Poll initial state
+      if (window.engineAPI) {
+        window.engineAPI.getSlots().then(updateSlotPills).catch(() => {});
+        refreshEngineCache();
+        this._unSlots = window.engineAPI.onSlotsUpdated(updateSlotPills);
+      }
+
+      // Live Logs quick open
+      const btnLogs = document.getElementById('btn-engine-logs');
+      if (btnLogs) {
+        btnLogs.addEventListener('click', () => {
+          if (window.NRDLiveLogs) window.NRDLiveLogs.open();
+        });
+      }
+
+      // Prune Cache
+      const btnPrune = document.getElementById('btn-engine-prune');
+      if (btnPrune) {
+        btnPrune.addEventListener('click', async () => {
+          if (!window.engineAPI) return;
+          btnPrune.disabled = true;
+          try {
+            const res = await window.engineAPI.pruneCache();
+            logToConsole(`Cache pruned: ${res.prunedCount} expired entries removed.`);
+            refreshEngineCache();
+            NRDToast.show({ type: 'success', title: 'Cache pruned', msg: `${res.prunedCount} expired entries cleaned.` });
+          } catch (err) {
+            logToConsole(`Error pruning cache: ${err.message}`);
+          } finally {
+            btnPrune.disabled = false;
+          }
+        });
+      }
+
+      // Test Harness Button Binder
+      const wireTest = (btnId, testName, testArgs, label) => {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.addEventListener('click', async () => {
+          if (!window.engineAPI) {
+            NRDToast.show({ type: 'warning', title: 'Engine API', msg: 'Engine API not available in browser preview.' });
+            return;
+          }
+          btn.disabled = true;
+          const origText = btn.textContent;
+          btn.textContent = 'Testing…';
+          logToConsole(`=== STARTING TEST: ${label} ===`);
+          try {
+            const res = await window.engineAPI.runTest(testName, testArgs);
+            logToConsole(`✓ SUCCESS: ${label}\n${JSON.stringify(res, null, 2)}`);
+            refreshEngineCache();
+            NRDToast.show({ type: 'success', title: 'Test Passed', msg: `${label} verified successfully.` });
+          } catch (err) {
+            logToConsole(`✕ FAILED: ${label}\nError: ${err.message}`);
+            NRDToast.show({ type: 'error', title: 'Test Failed', msg: err.message });
+          } finally {
+            btn.disabled = false;
+            btn.textContent = origText;
+          }
+        });
+      };
+
+      wireTest('btn-test-chrome', 'google-searches', { queries: ['luxury travel accessories'] }, 'Real Chrome Launch');
+      wireTest('btn-test-slots', 'parallel-slots', {}, '3-Slot Concurrency');
+      wireTest('btn-test-cache', 'cache', { keyword: 'b2b saas compliance software' }, 'Cache Hit vs Miss');
+      wireTest('btn-test-ratelimit', 'rate-limiter', {}, 'Rate Limiter Throttling');
+      wireTest('btn-test-captcha', 'captcha-alert', {}, 'CAPTCHA Safety Net Alert');
+      wireTest('btn-test-timing', 'timing-summary', {}, 'Timing Breakdown');
+      wireTest('btn-test-isolation', 'browser-isolation', {}, 'Browser Process Isolation');
     },
 
     destroy() {
       if (this._unTheme) this._unTheme();
       if (this._unUpdater) this._unUpdater();
+      if (this._unSlots) this._unSlots();
     },
   };
 

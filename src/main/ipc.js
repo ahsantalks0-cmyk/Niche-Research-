@@ -83,6 +83,97 @@ function registerDbIpc() {
   });
 }
 
+/**
+ * Registers all Browser Engine IPC handlers and event forwards.
+ * @param {import('electron').BrowserWindow} mainWindow
+ */
+function registerEngineIpc(mainWindow) {
+  const {
+    browserEngine,
+    engineCache,
+    rateLimiter,
+    slotPool,
+    testHarness,
+  } = require('./engine');
+
+  // Slots & Concurrency (Pillar 2)
+  ipcMain.handle('engine:get-slots', () => {
+    return slotPool.getSnapshot();
+  });
+
+  // Shared Page/Data Cache (Pillar 1)
+  ipcMain.handle('engine:get-cache-stats', () => {
+    return engineCache.getStats();
+  });
+
+  ipcMain.handle('engine:prune-cache', () => {
+    return engineCache.prune();
+  });
+
+  // Global Rate Limiter (Pillar 3)
+  ipcMain.handle('engine:get-rate-limiter-telemetry', () => {
+    return rateLimiter.getTelemetry();
+  });
+
+  // Timing Logs (Pillar 7)
+  ipcMain.handle('engine:get-timing-summary', (_e, runId) => {
+    return db.getTimingSummary(runId || null);
+  });
+
+  ipcMain.handle('engine:get-timing-logs', (_e, options) => {
+    return db.getTimingLogs(options || {});
+  });
+
+  // Browser Operations
+  ipcMain.handle('engine:search-google', (_e, params) => {
+    return browserEngine.searchGoogle(params);
+  });
+
+  // Engine Test Harness (Part 7)
+  ipcMain.handle('engine:run-test', async (_e, testName, args) => {
+    switch (testName) {
+      case 'google-searches':
+        return await testHarness.runGoogleSearchesTest(args?.queries);
+      case 'parallel-slots':
+        return await testHarness.runParallelSlotsTest();
+      case 'cache':
+        return await testHarness.runCacheTest(args?.keyword);
+      case 'rate-limiter':
+        return await testHarness.runRateLimiterTest();
+      case 'timing-summary':
+        return await testHarness.runTimingSummaryTest(args?.runId);
+      case 'browser-isolation':
+        return await testHarness.runBrowserIsolationTest();
+      case 'captcha-alert':
+        // Test CAPTCHA alert trigger
+        browserEngine.emit('captcha:detected', {
+          slotId: 2,
+          domain: 'google.com',
+          url: 'https://www.google.com/sorry/index?continue=...',
+          timestamp: new Date().toISOString(),
+          isTest: true,
+        });
+        return { success: true, message: 'Simulated CAPTCHA alert triggered on Slot #2' };
+      default:
+        throw new Error(`Unknown engine test: ${testName}`);
+    }
+  });
+
+  // Forward engine events to renderer for Live Logs & CAPTCHA banner
+  const sendToRenderer = (channel, data) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(channel, data);
+    }
+  };
+
+  browserEngine.on('log', (entry) => sendToRenderer('engine:log', entry));
+  browserEngine.on('captcha:detected', (data) => sendToRenderer('captcha:detected', data));
+  browserEngine.on('captcha:resolved', (data) => sendToRenderer('captcha:resolved', data));
+  slotPool.on('slots:updated', (data) => sendToRenderer('slots:updated', data));
+  rateLimiter.on('wait', (data) => sendToRenderer('rate-limiter:wait', data));
+}
+
 module.exports = {
   registerDbIpc,
+  registerEngineIpc,
 };

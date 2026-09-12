@@ -59,7 +59,7 @@ async function runTests() {
 
   // Test 5: Verify App Settings read and update
   const initialSettings = db.getSettings();
-  assert(initialSettings.schemaVersion === 1, 'Initial schema version should be 1');
+  assert(initialSettings.schemaVersion >= 1, 'Schema version should be >= 1');
 
   const updatedSettings = db.saveSettings({
     theme: 'dark',
@@ -203,7 +203,7 @@ async function runTests() {
 
   // Test 11: DB Diagnostics Health check
   const health = db.getDbHealth();
-  assert(health.schemaVersion === 1, 'Schema version should be 1');
+  assert(health.schemaVersion >= 1, 'Schema version should be >= 1');
   assert(health.tables.research_runs >= 1, 'Should count research_runs');
   assert(health.tables.niches >= 1, 'Should count niches');
   assert(health.tables.keywords >= 3, 'Should count keywords');

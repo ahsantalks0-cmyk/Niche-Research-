@@ -2,7 +2,16 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
-const VALID_EVENTS = new Set(['window:maximized', 'settings:changed', 'updater:state']);
+const VALID_EVENTS = new Set([
+  'window:maximized',
+  'settings:changed',
+  'updater:state',
+  'engine:log',
+  'captcha:detected',
+  'captcha:resolved',
+  'slots:updated',
+  'rate-limiter:wait',
+]);
 
 /**
  * Subscribe to main-process push events through a validated channel allowlist.
@@ -73,5 +82,34 @@ contextBridge.exposeInMainWorld('dbAPI', {
   findOne: (table, where) => ipcRenderer.invoke('db:findOne', table, where),
   deleteBy: (table, where) => ipcRenderer.invoke('db:deleteBy', table, where),
   count: (table, where) => ipcRenderer.invoke('db:count', table, where),
+});
+
+contextBridge.exposeInMainWorld('engineAPI', {
+  /* Slots & Concurrency (Pillar 2) */
+  getSlots: () => ipcRenderer.invoke('engine:get-slots'),
+
+  /* Shared Cache (Pillar 1) */
+  getCacheStats: () => ipcRenderer.invoke('engine:get-cache-stats'),
+  pruneCache: () => ipcRenderer.invoke('engine:prune-cache'),
+
+  /* Global Rate Limiter (Pillar 3) */
+  getRateLimiterTelemetry: () => ipcRenderer.invoke('engine:get-rate-limiter-telemetry'),
+
+  /* Timing Logs (Pillar 7) */
+  getTimingSummary: (runId) => ipcRenderer.invoke('engine:get-timing-summary', runId),
+  getTimingLogs: (options) => ipcRenderer.invoke('engine:get-timing-logs', options),
+
+  /* Search & Scraping */
+  searchGoogle: (params) => ipcRenderer.invoke('engine:search-google', params),
+
+  /* Test Harness (Part 7) */
+  runTest: (testName, args) => ipcRenderer.invoke('engine:run-test', testName, args),
+
+  /* Real-time event streams (Part 4, 6) */
+  onLog: (cb) => on('engine:log', cb),
+  onCaptchaDetected: (cb) => on('captcha:detected', cb),
+  onCaptchaResolved: (cb) => on('captcha:resolved', cb),
+  onSlotsUpdated: (cb) => on('slots:updated', cb),
+  onRateLimiterWait: (cb) => on('rate-limiter:wait', cb),
 });
 
