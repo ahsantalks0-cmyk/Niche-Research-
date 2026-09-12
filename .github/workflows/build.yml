@@ -51,10 +51,16 @@ jobs:
         run: |
           $owner = "${{ github.repository_owner }}"
           $repo  = "${{ github.event.repository.name }}"
-          (Get-Content app.config.json) `
+          # package.json — electron-builder reads build.publish from HERE (critical)
+          (Get-Content package.json -Raw) `
             -replace '__GH_OWNER__', $owner `
             -replace '__GH_REPO__', $repo |
-          Set-Content app.config.json
+          Set-Content package.json -NoNewline
+          # app.config.json — the app's runtime updater feed (src/main/config.js)
+          (Get-Content app.config.json -Raw) `
+            -replace '__GH_OWNER__', $owner `
+            -replace '__GH_REPO__', $repo |
+          Set-Content app.config.json -NoNewline
           Write-Host "Publish target: $owner/$repo"
 
       - name: Resolve unique release version (auto-bump past existing tags)
