@@ -4,8 +4,6 @@ name: CI Checks
 # The full test suite lands here when the agent runtime arrives in Phase 1.
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:

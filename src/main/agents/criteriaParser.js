@@ -453,6 +453,24 @@ function parseRun(runId) {
 
   persistTx();
 
+  // Automatically review with Quality Supervisor if not already reviewed for this run
+  try {
+    const existingRev = dbInstance.prepare('SELECT id FROM quality_reviews WHERE run_id = ? AND agent_number = 2').get(runId);
+    if (!existingRev) {
+      const qualitySupervisor = require('./qualitySupervisor');
+      qualitySupervisor.reviewOutput({
+        runId: Number(runId),
+        agentNumber: 2,
+        output: parsedBrief,
+        context: { runId: Number(runId), brief: parsedBrief },
+        reviewRound: 1,
+        engine,
+      });
+    }
+  } catch (qsErr) {
+    console.warn(`[criteriaParser] QS auto-review warning: ${qsErr.message}`);
+  }
+
   engine.log('info', `✅ Parser: brief created for Run #${runId} (${effectiveQuantity} niches, ${countriesMode === 'auto_potential' ? 'auto countries' : `${countriesList.length} countries`})`);
 
   return {

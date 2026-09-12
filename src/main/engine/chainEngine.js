@@ -91,9 +91,11 @@ class ChainEngine extends EventEmitter {
 
     engine.log('info', `🚀 Chain Engine: Starting execution for Run #${runIdNum} (status: ${run.status})…`);
 
-    // 1. Ensure Agent #2 (Criteria Parser) has run
+    // 1. Ensure Agent #2 (Criteria Parser) has run AND been reviewed by QS
     let criteriaRow = dbInstance.prepare('SELECT * FROM run_criteria WHERE run_id = ?').get(runIdNum);
-    if (!criteriaRow || !criteriaRow.parsed_brief) {
+    const ag2Review = dbInstance.prepare('SELECT id FROM quality_reviews WHERE run_id = ? AND agent_number = 2').get(runIdNum);
+
+    if (!criteriaRow || !criteriaRow.parsed_brief || !ag2Review) {
       engine.log('info', `📋 Chain Engine: Triggering Agent #2 (Criteria Parser) for Run #${runIdNum}…`);
       const ag2Spec = { number: 2, name: 'Criteria Parser Agent', critical: true };
       const parseResult = await this._executeAgentWithRetry(runIdNum, ag2Spec);
@@ -104,7 +106,7 @@ class ChainEngine extends EventEmitter {
       }
     }
 
-    // 2. Ensure Agent #1 (Department Head) has built plan
+    // 2. Ensure Agent #1 (Department Head) has built plan AND been reviewed by QS
     let plan = null;
     if (run.dh_execution_plan) {
       try {
@@ -114,7 +116,9 @@ class ChainEngine extends EventEmitter {
       }
     }
 
-    if (!plan) {
+    const ag1Review = dbInstance.prepare('SELECT id FROM quality_reviews WHERE run_id = ? AND agent_number = 1').get(runIdNum);
+
+    if (!plan || !ag1Review) {
       engine.log('info', `👑 Chain Engine: Triggering Agent #1 (Department Head) for Run #${runIdNum}…`);
       const ag1Spec = { number: 1, name: 'Department Head Agent', critical: true };
       await this._executeAgentWithRetry(runIdNum, ag1Spec);
@@ -368,16 +372,23 @@ class ChainEngine extends EventEmitter {
 
         // Quality Supervisor Interceptor (Agent #3 does NOT review itself)
         if (agentNum !== 3 && !result?.skipped) {
-          const qsReview = await qualitySupervisor.reviewOutput({
-            runId,
-            agentNumber: agentNum,
-            output: result,
-            context,
-            reviewRound,
-            engine,
-          });
+          let qsReview = null;
+          try {
+            qsReview = await qualitySupervisor.reviewOutput({
+              runId,
+              agentNumber: agentNum,
+              output: result,
+              context,
+              reviewRound,
+              engine,
+            });
+          } catch (qsErr) {
+            engine.log('error', `🚨 QS ERROR: Quality Supervisor review failed for Agent #${agentNum}: ${qsErr.message}`);
+            console.error(`🚨 QS ERROR for Agent #${agentNum}:`, qsErr);
+          }
 
-          if (qsReview.verdict === 'send_back') {
+          if (qsReview) {
+            if (qsReview.verdict === 'send_back') {
             // Check run-level safety valve (max 10 total send-backs per run)
             const totalRunSendbacks = dbInstance.prepare(`
               SELECT COUNT(*) as count FROM quality_reviews
@@ -445,6 +456,7 @@ class ChainEngine extends EventEmitter {
             }
           }
         }
+      }
 
         const finishedAt = new Date().toISOString();
         const durationMs = Date.now() - t0;
