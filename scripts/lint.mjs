@@ -86,8 +86,8 @@ const updaterSrc = readFileSync(join(root, 'src/main/updater.js'), 'utf8');
 if (!updaterSrc.includes("provider: 'github'")) fail('updater feed provider not github');
 else ok('electron-updater feed = github provider');
 const ci = readFileSync(join(root, '.github/workflows/build.yml'), 'utf8');
-if (!ci.includes('--publish always')) fail('build.yml does not publish artifacts');
-else ok('CI publishes release artifacts (--publish always)');
+if (!ci.includes('gh release upload') || !ci.includes('--publish never')) fail('build.yml must build with --publish never and upload assets via gh release upload (race-free publishing)');
+else ok('CI publishes via gh release upload (single-threaded, race-free)');
 if (!ci.includes('latest.yml') && !ci.includes('nsis')) fail('build.yml may not produce latest.yml (NSIS target missing)');
 else ok('NSIS target present → latest.yml generated');
 

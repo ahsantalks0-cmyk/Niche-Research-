@@ -4,13 +4,17 @@ name: Build & Release
 # (with the .exe + latest.yml) so the in-app electron-updater can find it.
 #
 # ANTI-COLLISION VERSIONING:
-#   The "Resolve unique release version" step checks every existing tag
-#   (local + `git ls-remote` on the remote) and, if v{version} is already
-#   taken, auto-bumps the patch number (0.1.0 → 0.1.1 → …) and rewrites
-#   package.json BEFORE electron-builder runs. So `--publish always` can
-#   never hit "release with tag vX.Y.Z already exists" and a new release is
-#   always visible to electron-updater. Re-running the workflow always
-#   produces the NEXT version, never a duplicate.
+#   "Resolve unique release version" checks every existing tag (local +
+#   remote via git ls-remote) and, if v{version} is taken, auto-bumps the
+#   patch (0.1.0 → 0.1.1 → …) and rewrites package.json BEFORE the build.
+#   Every run therefore publishes a brand-new release — never a duplicate.
+#
+# WHY WE PUBLISH VIA gh (not electron-builder --publish always):
+#   electron-builder spawns TWO parallel GitHub publisher instances (one per
+#   artifact) which race to create the same release → the loser gets
+#   HTTP 422 "Published releases must have a valid tag" and the whole task
+#   aborts mid-upload (observed on run #2). Publishing here is single-threaded
+#   and idempotent: the release + tag are created first, then assets upload.
 
 on:
   push:
@@ -46,41 +50,53 @@ jobs:
       - name: Syntax lint
         run: npm run lint
 
-      - name: Inject publish repo (owner/name)
-        shell: pwsh
-        run: |
-          $owner = "${{ github.repository_owner }}"
-          $repo  = "${{ github.event.repository.name }}"
-          # package.json — electron-builder reads build.publish from HERE (critical)
-          (Get-Content package.json -Raw) `
-            -replace '__GH_OWNER__', $owner `
-            -replace '__GH_REPO__', $repo |
-          Set-Content package.json -NoNewline
-          # app.config.json — the app's runtime updater feed (src/main/config.js)
-          (Get-Content app.config.json -Raw) `
-            -replace '__GH_OWNER__', $owner `
-            -replace '__GH_REPO__', $repo |
-          Set-Content app.config.json -NoNewline
-          Write-Host "Publish target: $owner/$repo"
-
       - name: Resolve unique release version (auto-bump past existing tags)
         shell: bash
         run: node scripts/resolve-version.mjs
 
-      - name: Show resolved version
-        shell: pwsh
-        run: |
-          $v = (Get-Content package.json | ConvertFrom-Json).version
-          Write-Host "::notice::Releasing v$v — installer: Niche Research Department-Setup-$v.exe"
+      - name: Build & package (electron-builder → NSIS, no network publish)
+        run: npx electron-builder --win nsis --publish never
 
-      - name: Build & package (electron-builder → NSIS → GitHub Release)
+      - name: Publish release (single-threaded, race-free)
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win nsis --publish always
+        run: |
+          set -e
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v$VERSION"
+          echo "Publishing $TAG"
+
+          # Defensive: if a draft/empty release with this tag somehow exists,
+          # adopt it instead of failing.
+          gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null && \
+            echo "Release $TAG already exists — will upload assets onto it." || true
+
+          # Create the tag + release up-front so asset uploads can never race.
+          gh release create "$TAG" \
+            --title "Niche Research Department $TAG" \
+            --notes "Automated build from commit ${{ github.sha }}.
+          - Windows installer (NSIS, x64)
+          - latest.yml included for in-app auto-updates" \
+            --latest || echo "Release creation skipped (already exists)"
+
+          # Upload installer + blockmap + updater metadata.
+          # Use -w only for files that exist (blockmap/latest.yml always do;
+          # glob kept defensive anyway).
+          gh release upload "$TAG" \
+            dist/*Setup-*.exe \
+            dist/*Setup-*.exe.blockmap \
+            dist/latest.yml \
+            --clobber
+
+          echo "Release $TAG published:"
+          gh release view "$TAG" --json assets -q '.assets[].name'
 
       - name: Upload installer artifact (always, for inspection)
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/latest.yml
           if-no-files-found: error

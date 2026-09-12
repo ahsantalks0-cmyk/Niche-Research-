@@ -43,8 +43,8 @@
     ],
     "publish": {
       "provider": "github",
-      "owner": "__GH_OWNER__",
-      "repo": "__GH_REPO__",
+      "owner": "ahsantalks0-cmyk",
+      "repo": "Niche-Research-",
       "vPrefixedTagName": true,
       "releaseType": "release"
     },
@@ -58,7 +58,7 @@
         }
       ],
       "icon": "assets/icons/icon.ico",
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "Niche-Research-Department-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
