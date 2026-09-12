@@ -12,10 +12,12 @@ const Database = require('better-sqlite3');
 
 const migrationV1 = require('./migrations/v1');
 const migrationV2 = require('./migrations/v2');
+const migrationV3 = require('./migrations/v3');
 
 const MIGRATIONS = [
   migrationV1,
   migrationV2,
+  migrationV3,
 ];
 
 let _db = null;
@@ -431,7 +433,7 @@ function createRun(runData, countryCodes = [], criteriaBrief = {}) {
 
   const AGENT_LAYERS = [
     { num: 1, name: 'Coordinator', layer: 'control' },
-    { num: 2, name: 'Approval Gate', layer: 'control' },
+    { num: 2, name: 'Criteria Parser Agent', layer: 'control' },
     { num: 3, name: 'Jarvis Gateway', layer: 'control' },
     { num: 4, name: 'Scheduler Agent', layer: 'control' },
     { num: 5, name: 'Senior Consultant Chat', layer: 'control' },
@@ -474,6 +476,7 @@ function createRun(runData, countryCodes = [], criteriaBrief = {}) {
       input_mode: runData.input_mode || 'discovery',
       business_modes: JSON.stringify(runData.business_modes || ['blogging']),
       niche_quantity: runData.niche_quantity || 1,
+      own_niche_name: runData.own_niche_name || null,
       domain: runData.domain || null,
       competition_level: runData.competition_level || 'medium',
       status: runData.status || 'pending',
@@ -498,15 +501,7 @@ function createRun(runData, countryCodes = [], criteriaBrief = {}) {
       insertCountryStmt.run(runId, code, name, 'user_selected', score);
     }
 
-    // 3. Insert run_criteria
-    insert('run_criteria', {
-      run_id: runId,
-      raw_input: JSON.stringify(runData),
-      parsed_brief: JSON.stringify(criteriaBrief),
-      parser_version: '1.0',
-    });
-
-    // 4. Initialize agent_status for all 35 agents
+    // 3. Initialize agent_status for all 35 agents
     const insertAgentStmt = db.prepare(`
       INSERT INTO agent_status (run_id, agent_number, agent_name, layer, status)
       VALUES (?, ?, ?, ?, 'idle')
@@ -516,10 +511,20 @@ function createRun(runData, countryCodes = [], criteriaBrief = {}) {
       insertAgentStmt.run(runId, a.num, a.name, a.layer);
     }
 
-    return getRun(runId);
+    return runId;
   });
 
-  return createTx();
+  const createdRunId = createTx();
+
+  // Automatically trigger Criteria Parser (Agent #2)
+  try {
+    const { parseRun } = require('./agents/criteriaParser');
+    parseRun(createdRunId);
+  } catch (err) {
+    console.warn(`[db] Auto-parse for run #${createdRunId} encountered: ${err.message}`);
+  }
+
+  return getRun(createdRunId);
 }
 
 /**
@@ -536,12 +541,28 @@ function getRun(runId) {
   const criteria = db.prepare('SELECT * FROM run_criteria WHERE run_id = ?').get(runId);
   const agents = db.prepare('SELECT * FROM agent_status WHERE run_id = ? ORDER BY agent_number ASC').all(runId);
 
+  let parsedBrief = null;
+  let rawInput = null;
+
+  if (criteria) {
+    try {
+      parsedBrief = typeof criteria.parsed_brief === 'string' ? JSON.parse(criteria.parsed_brief) : criteria.parsed_brief;
+    } catch {
+      parsedBrief = null;
+    }
+    try {
+      rawInput = typeof criteria.raw_input === 'string' ? JSON.parse(criteria.raw_input) : criteria.raw_input;
+    } catch {
+      rawInput = null;
+    }
+  }
+
   return {
     ...run,
     business_modes: run.business_modes ? JSON.parse(run.business_modes) : [],
     dh_execution_plan: run.dh_execution_plan ? JSON.parse(run.dh_execution_plan) : null,
     countries,
-    criteria: criteria ? { ...criteria, parsed_brief: JSON.parse(criteria.parsed_brief), raw_input: JSON.parse(criteria.raw_input) } : null,
+    criteria: criteria ? { ...criteria, parsed_brief: parsedBrief, raw_input: rawInput } : null,
     agents,
   };
 }
@@ -568,10 +589,23 @@ function getRuns(options = {}) {
       'SELECT country_code, country_name, selection_type, potential_score FROM run_countries WHERE run_id = ? ORDER BY id ASC'
     ).all(run.id);
 
+    const criteria = db.prepare('SELECT parser_version, parsed_brief FROM run_criteria WHERE run_id = ?').get(run.id);
+    let hasBrief = false;
+    if (criteria && criteria.parsed_brief) {
+      try {
+        const b = JSON.parse(criteria.parsed_brief);
+        hasBrief = b && Object.keys(b).length > 0;
+      } catch {
+        hasBrief = false;
+      }
+    }
+
     return {
       ...run,
       business_modes: businessModes,
       countries,
+      criteria_version: criteria ? criteria.parser_version : null,
+      has_brief: hasBrief,
     };
   });
 }
@@ -946,6 +980,7 @@ module.exports = {
   saveSettings,
   getCountries,
   createRun,
+  parseRun: (runId) => require('./agents/criteriaParser').parseRun(runId),
   getRun,
   getRuns,
   updateAgentStatus,

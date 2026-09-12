@@ -105,6 +105,12 @@
         const res = await fetch(`/api/db/runs/${runId}`);
         return await res.json();
       },
+      parseRun: async (runId) => {
+        const res = await fetch(`/api/db/runs/${runId}/parse`, {
+          method: 'POST',
+        });
+        return await res.json();
+      },
       getRuns: async (options = {}) => {
         const limit = options.limit || 50;
         const offset = options.offset || 0;

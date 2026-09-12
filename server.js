@@ -88,6 +88,16 @@ app.get('/api/db/runs/:id', (req, res) => {
   }
 });
 
+app.post('/api/db/runs/:id/parse', (req, res) => {
+  try {
+    const runId = Number(req.params.id);
+    const result = db.parseRun(runId);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/db/agent-status', (req, res) => {
   try {
     const { runId, agentNumber, statusUpdate } = req.body;

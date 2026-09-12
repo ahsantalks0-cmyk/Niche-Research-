@@ -39,6 +39,10 @@ function registerDbIpc() {
     return db.getRuns(options);
   });
 
+  ipcMain.handle('db:parseRun', (_e, runId) => {
+    return db.parseRun(runId);
+  });
+
   ipcMain.handle('db:updateAgentStatus', (_e, runId, agentNumber, statusUpdate) => {
     return db.updateAgentStatus(runId, agentNumber, statusUpdate);
   });

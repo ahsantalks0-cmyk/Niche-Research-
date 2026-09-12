@@ -46,10 +46,10 @@ async function runP05Tests() {
     }
   }
 
-  // 1. Database schema v2 and 37 tables
+  // 1. Database schema v2+ and 37 tables
   test('DB has 37 tables including page_cache and timing_logs', () => {
     const health = db.getDbHealth();
-    assert.strictEqual(health.schemaVersion, 2, 'Schema version should be 2');
+    assert(health.schemaVersion >= 2, `Schema version should be >= 2, got ${health.schemaVersion}`);
     assert(health.tables.page_cache !== undefined, 'page_cache table exists');
     assert(health.tables.timing_logs !== undefined, 'timing_logs table exists');
     const tableCount = Object.keys(health.tables).length;

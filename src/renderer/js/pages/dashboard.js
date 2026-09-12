@@ -23,11 +23,11 @@
   ];
 
   const LAYERS = [
-    { name: 'Control', agents: ['Coordinator', 'Scheduler', 'Resource Broker', 'Approval Gate'] },
-    { name: 'Discovery', agents: ['Trend Scanner', 'SERP Cartographer', 'Forum Miner', 'Social Pulse', 'Competitor Sweep'] },
-    { name: 'Deep Research', agents: ['Search Analyst', 'Content Auditor', 'Keyword Profiler', 'Backlink Recon', 'E-E-A-T Assessor', 'SERP Feature Analyst', 'Video Landscape', 'Audience Analyst', 'Market Sizing'] },
-    { name: 'Intelligence', agents: ['Monetization Modeler', 'Affiliate Mapper', 'Product Sourcing', 'Ad Revenue Estimator', 'Competition Scorer', 'Demand Forecaster', 'Seasonality Analyst', 'Risk Assessor', 'Locale Strategist'] },
-    { name: 'QA & Reporting', agents: ['Data Verifier', 'Fact Checker', 'Consistency Auditor', 'Report Composer', 'Insight Summarizer', 'Country Dossier', 'Niche Dossier', 'Export Steward'] },
+    { name: 'Control (1–5)', agents: ['Coordinator', 'Criteria Parser', 'Jarvis Gateway', 'Scheduler Agent', 'Senior Consultant Chat'] },
+    { name: 'Discovery (6–10)', agents: ['Trend Scanner', 'SERP Cartographer', 'Forum Miner', 'Duplicate & History Check', 'Country Potential Intelligence'] },
+    { name: 'Deep Research (11–26)', agents: ['Keyword Research', 'SERP Analysis', 'Competitor Deep-Dive', 'Content Gap Analysis', 'Unmet Search Intent', 'Social Media Competition', 'Paid Ads Competition', 'Monetization & Digital Product', 'E-commerce Product Research', 'Digital Product List', 'E-commerce Product List', 'Affiliate Program Research', 'Ad Revenue & RPM', 'Audience & Persona', 'Country Localization', 'Domain & Brand Availability'] },
+    { name: 'Intelligence (27–30)', agents: ['Country Benchmarking', 'Opportunity Scoring', 'Final Verdict', 'Risk & Compliance'] },
+    { name: 'QA & Reporting (31–35)', agents: ['Quality Supervisor', 'QA & Validation', 'Report Specialist', 'SEO Department Handoff', 'Re-Research Manager'] },
   ];
 
   window.NRDPages.dashboard = {

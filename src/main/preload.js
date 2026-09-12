@@ -63,6 +63,7 @@ contextBridge.exposeInMainWorld('dbAPI', {
   /* Runs */
   createRun: (runData, countryCodes, criteriaBrief) =>
     ipcRenderer.invoke('db:createRun', runData, countryCodes, criteriaBrief),
+  parseRun: (runId) => ipcRenderer.invoke('db:parseRun', runId),
   getRun: (runId) => ipcRenderer.invoke('db:getRun', runId),
   getRuns: (options) => ipcRenderer.invoke('db:getRuns', options),
   updateAgentStatus: (runId, agentNumber, statusUpdate) =>

@@ -735,8 +735,8 @@
             if (window.NRDToast) {
               window.NRDToast.show({
                 type: 'success',
-                title: `Run #${createdRun.id} Commissioned`,
-                msg: `35-agent swarm assigned with ${countryCodes.length === 0 ? 'auto country potential' : `${countryCodes.length} countries`}.`,
+                title: `Run #${createdRun.id} Commissioned & Parsed`,
+                msg: `Mission Brief generated. 35-agent swarm assigned (${countryCodes.length === 0 ? 'auto-potential' : `${countryCodes.length} countries`}).`,
               });
             }
 
@@ -787,7 +787,7 @@
           if (!Array.isArray(runs) || runs.length === 0) {
             tbody.innerHTML = `
               <tr>
-                <td colspan="8" style="text-align:center; color:var(--text-3); padding:28px">
+                <td colspan="9" style="text-align:center; color:var(--text-3); padding:28px">
                   No research runs commissioned yet. Configure a run above and click <b>Start Research</b>.
                 </td>
               </tr>
@@ -813,6 +813,14 @@
 
             const statusClass = `status-${r.status || 'pending'}`;
 
+            // Brief chip logic (P1.1)
+            let briefChip = `<span class="badge" style="background:rgba(255,255,255,0.06); color:var(--text-3)">Pending</span>`;
+            if (r.status === 'failed') {
+              briefChip = `<span class="badge" style="background:rgba(224,122,106,0.15); color:#E07A6A; border:1px solid rgba(224,122,106,0.3)">Brief ✕</span>`;
+            } else if (r.has_brief || r.status === 'planning') {
+              briefChip = `<span class="badge" style="background:rgba(200,140,80,0.15); color:var(--cu); border:1px solid rgba(200,140,80,0.3)">Brief v${r.criteria_version || '1.0'} ✓</span>`;
+            }
+
             return `
               <tr data-run-id="${r.id}">
                 <td><b class="text-cu">#${r.id}</b></td>
@@ -824,6 +832,7 @@
                 </td>
                 <td><b>${r.niche_quantity || 1}</b></td>
                 <td>${countryChips}</td>
+                <td>${briefChip}</td>
                 <td><span class="run-status-pill ${statusClass}"><span class="sc-dot"></span>${r.status || 'pending'}</span></td>
                 <td style="font-size:11.5px; color:var(--text-3)">${formatTime(r.created_at)}</td>
                 <td style="text-align:right">
@@ -846,7 +855,7 @@
           console.error('[NewResearch] Failed to load runs ledger:', err);
           tbody.innerHTML = `
             <tr>
-              <td colspan="8" style="text-align:center; color:#E07A6A; padding:20px">
+              <td colspan="9" style="text-align:center; color:#E07A6A; padding:20px">
                 Failed to load runs from database: ${err.message}
               </td>
             </tr>
@@ -884,7 +893,7 @@
       if (!modalRoot) return;
 
       const flagList = countryCodes.length === 0
-        ? 'Auto-Select Mode (Agent #10 will analyze all potential markets)'
+        ? 'Auto-Potential Mode (Agent #10 will analyze all potential markets)'
         : countryCodes.map((c) => `${window.NRDCountrySelector?.getFlagEmoji(c) || '🌐'} ${c}`).join(', ');
 
       const modalEl = document.createElement('div');
@@ -894,11 +903,11 @@
           <div class="modal-header">
             <div>
               <div class="modal-success-badge">
-                ${NRDIcons.get('check')} Run Saved to SQLite
+                ${NRDIcons.get('check')} Run Created & Parsed
               </div>
-              <div class="modal-title">Research Run Created — Run #${run.id}</div>
+              <div class="modal-title">Run #${run.id} Commissioned & Mission Brief Ready</div>
               <div class="modal-subtitle">
-                The Department Head will pick this up in Phase 1 (P1.2). For now, your run is saved and queued.
+                Run #${run.id} created & parsed — Mission Brief ready. Department Head will take over in P1.2.
               </div>
             </div>
             <button class="modal-close-btn" id="m-btn-close">✕</button>
@@ -915,25 +924,25 @@
             </div>
             <div class="kv-row" style="padding:6px 0">
               <span class="kv-k">Niche Quantity</span>
-              <span class="kv-v"><b>${run.niche_quantity}</b> niches requested</span>
+              <span class="kv-v"><b>${run.niche_quantity}</b> ${run.niche_quantity === 1 ? 'niche' : 'niches'} requested</span>
             </div>
             <div class="kv-row" style="padding:6px 0">
               <span class="kv-k">Target Countries</span>
               <span class="kv-v">${flagList}</span>
             </div>
             <div class="kv-row" style="padding:6px 0">
-              <span class="kv-k">Approval Gate Policy</span>
-              <span class="kv-v">${run.auto_approve ? 'Auto-approve ON' : 'Approval Gate ON (Manual confirmation)'}</span>
+              <span class="kv-k">Criteria Parser Agent (#2)</span>
+              <span class="kv-v" style="color:var(--cu); font-weight:600">Mission Brief v1.0 Generated ✓</span>
             </div>
             <div class="kv-row" style="padding:6px 0">
-              <span class="kv-k">Agent Swarm</span>
-              <span class="kv-v text-em">35 agents initialized in agent_status table</span>
+              <span class="kv-k">Status</span>
+              <span class="kv-v text-em">Planning (Ready for Department Head swarm in P1.2)</span>
             </div>
           </div>
 
           <div style="display:flex; justify-content:flex-end; gap:10px">
             <button class="btn btn-outline" id="m-btn-new-run">Commission Another Run</button>
-            <button class="btn btn-cu" id="m-btn-view-details">View Run Details</button>
+            <button class="btn btn-cu" id="m-btn-view-details">Inspect Mission Brief</button>
           </div>
         </div>
       `;
@@ -967,11 +976,11 @@
       const modalEl = document.createElement('div');
       modalEl.className = 'modal-backdrop';
       modalEl.innerHTML = `
-        <div class="modal-dialog" style="max-width:760px">
+        <div class="modal-dialog" style="max-width:820px">
           <div class="modal-header">
             <div>
-              <div class="modal-title">Run #${runId} Details</div>
-              <div class="modal-subtitle">Inspecting record from SQLite <code>research_runs</code> and <code>agent_status</code>.</div>
+              <div class="modal-title">Run #${runId} Details & Mission Brief</div>
+              <div class="modal-subtitle">Inspecting record from SQLite <code>research_runs</code>, <code>run_criteria</code>, and <code>agent_status</code>.</div>
             </div>
             <button class="modal-close-btn" id="md-btn-close">✕</button>
           </div>
@@ -988,131 +997,273 @@
         if (e.target === modalEl) closeModal();
       });
 
-      try {
-        let runData = null;
-        if (window.dbAPI && typeof window.dbAPI.getRun === 'function') {
-          runData = await window.dbAPI.getRun(runId);
-        } else {
-          const res = await fetch(`/api/db/runs/${runId}`);
-          runData = await res.json();
-        }
-
-        if (!runData) {
-          throw new Error('Run record not found in database.');
-        }
-
-        const mdContent = modalEl.querySelector('#md-content');
-        if (!mdContent) return;
-
-        const countries = runData.countries || [];
-        const agents = runData.agents || [];
-
-        // Group agents by layer
-        const layers = {
-          control: { name: 'Control Layer (Agents 1–5)', items: [] },
-          discovery: { name: 'Discovery Layer (Agents 6–10)', items: [] },
-          deep_research: { name: 'Deep Research Layer (Agents 11–26)', items: [] },
-          intelligence: { name: 'Intelligence Layer (Agents 27–30)', items: [] },
-          qa_reporting: { name: 'QA & Reporting Layer (Agents 31–35)', items: [] },
-        };
-
-        agents.forEach((ag) => {
-          if (layers[ag.layer]) {
-            layers[ag.layer].items.push(ag);
+      const renderDetails = async () => {
+        try {
+          let runData = null;
+          if (window.dbAPI && typeof window.dbAPI.getRun === 'function') {
+            runData = await window.dbAPI.getRun(runId);
+          } else {
+            const res = await fetch(`/api/db/runs/${runId}`);
+            runData = await res.json();
           }
-        });
 
-        mdContent.style.textAlign = 'left';
-        mdContent.innerHTML = `
-          <div style="background:var(--ink-800); border:1px solid var(--line-2); border-radius:10px; padding:14px; margin-bottom:16px">
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px">
-              <div class="kv-row" style="padding:4px 0">
-                <span class="kv-k">Run Name</span>
-                <span class="kv-v text-cu">${runData.run_name}</span>
-              </div>
-              <div class="kv-row" style="padding:4px 0">
-                <span class="kv-k">Status</span>
-                <span class="kv-v"><span class="run-status-pill status-${runData.status}">${runData.status}</span></span>
-              </div>
-              <div class="kv-row" style="padding:4px 0">
-                <span class="kv-k">Input Mode</span>
-                <span class="kv-v">${runData.input_mode}</span>
-              </div>
-              <div class="kv-row" style="padding:4px 0">
-                <span class="kv-k">Quantity</span>
-                <span class="kv-v">${runData.niche_quantity} niches</span>
-              </div>
-              ${runData.domain ? `
-                <div class="kv-row" style="padding:4px 0">
-                  <span class="kv-k">Domain</span>
-                  <span class="kv-v">${runData.domain}</span>
-                </div>
-              ` : ''}
-              <div class="kv-row" style="padding:4px 0">
-                <span class="kv-k">Auto-approve</span>
-                <span class="kv-v">${runData.auto_approve ? 'Enabled' : 'Disabled (Approval Gate)'}</span>
-              </div>
-            </div>
-          </div>
+          if (!runData) {
+            throw new Error('Run record not found in database.');
+          }
 
-          <div style="margin-bottom:16px">
-            <div class="section-label">Target Countries (${countries.length})</div>
-            ${countries.length === 0 ? `
-              <div style="font-size:12px; color:var(--em); padding:8px 12px; background:var(--ink-800); border:1px solid var(--line-cu); border-radius:8px">
-                Auto-select mode active — Country Potential Intelligence Agent (#10) will populate all viable markets in Phase 1.
-              </div>
-            ` : `
-              <div style="display:flex; flex-wrap:wrap; gap:8px">
-                ${countries.map((c) => {
-                  const flag = window.NRDCountrySelector?.getFlagEmoji(c.country_code) || '🌐';
-                  return `
-                    <div class="cs-tray-chip" style="animation:none">
-                      <span class="cs-tc-flag">${flag}</span>
-                      <span class="cs-tc-name">${c.country_name || c.country_code}</span>
-                      <span class="cs-tc-code">${c.country_code}</span>
-                      <span class="badge" style="font-size:9.5px">${(c.potential_score || 0).toFixed(1)}</span>
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-            `}
-          </div>
+          const mdContent = modalEl.querySelector('#md-content');
+          if (!mdContent) return;
 
-          <div>
-            <div class="section-label">35-Agent Layer Status Matrix</div>
-            <div class="agent-status-matrix">
-              ${Object.entries(layers).map(([layerKey, layerData]) => `
-                <div class="asm-layer">
-                  <div class="asm-layer-head">
-                    <span>${layerData.name}</span>
-                    <span>${layerData.items.length} Agents</span>
-                  </div>
-                  <div class="asm-agent-list">
-                    ${layerData.items.map((ag) => `
-                      <div class="asm-agent-item">
-                        <div class="asm-agent-name" title="#${ag.agent_number} ${ag.agent_name}">
-                          <b style="color:var(--text-3); margin-right:4px">#${ag.agent_number}</b>${ag.agent_name}
-                        </div>
-                        <span class="asm-agent-pill">${ag.status}</span>
-                      </div>
-                    `).join('')}
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        `;
-      } catch (err) {
-        console.error('[NewResearch] Failed to load run details:', err);
-        const mdContent = modalEl.querySelector('#md-content');
-        if (mdContent) {
+          const countries = runData.countries || [];
+          const agents = runData.agents || [];
+          const criteria = runData.criteria || {};
+          const brief = criteria.parsed_brief || null;
+
+          // Group agents by layer
+          const layers = {
+            control: { name: 'Control Layer (Agents 1–5)', items: [] },
+            discovery: { name: 'Discovery Layer (Agents 6–10)', items: [] },
+            deep_research: { name: 'Deep Research Layer (Agents 11–26)', items: [] },
+            intelligence: { name: 'Intelligence Layer (Agents 27–30)', items: [] },
+            qa_reporting: { name: 'QA & Reporting Layer (Agents 31–35)', items: [] },
+          };
+
+          agents.forEach((ag) => {
+            if (layers[ag.layer]) {
+              layers[ag.layer].items.push(ag);
+            }
+          });
+
+          mdContent.style.textAlign = 'left';
           mdContent.innerHTML = `
-            <div style="color:#E07A6A; padding:20px">
-              Failed to load run details: ${err.message}
+            <!-- High-Level Run Summary -->
+            <div style="background:var(--ink-800); border:1px solid var(--line-2); border-radius:10px; padding:14px; margin-bottom:16px">
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px">
+                <div class="kv-row" style="padding:4px 0">
+                  <span class="kv-k">Run Name</span>
+                  <span class="kv-v text-cu">${runData.run_name}</span>
+                </div>
+                <div class="kv-row" style="padding:4px 0">
+                  <span class="kv-k">Status</span>
+                  <span class="kv-v"><span class="run-status-pill status-${runData.status}">${runData.status}</span></span>
+                </div>
+                <div class="kv-row" style="padding:4px 0">
+                  <span class="kv-k">Input Mode</span>
+                  <span class="kv-v">${runData.input_mode}</span>
+                </div>
+                <div class="kv-row" style="padding:4px 0">
+                  <span class="kv-k">Quantity</span>
+                  <span class="kv-v">${runData.niche_quantity} niches</span>
+                </div>
+                ${runData.own_niche_name ? `
+                  <div class="kv-row" style="padding:4px 0">
+                    <span class="kv-k">Candidate Niche</span>
+                    <span class="kv-v text-cu">${runData.own_niche_name}</span>
+                  </div>
+                ` : ''}
+                ${runData.domain ? `
+                  <div class="kv-row" style="padding:4px 0">
+                    <span class="kv-k">Domain</span>
+                    <span class="kv-v">${runData.domain}</span>
+                  </div>
+                ` : ''}
+                <div class="kv-row" style="padding:4px 0">
+                  <span class="kv-k">Auto-approve</span>
+                  <span class="kv-v">${runData.auto_approve ? 'Enabled (1-click)' : 'Disabled (Approval Gate)'}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Error Banner if failed -->
+            ${(runData.status === 'failed' || runData.error_summary) ? `
+              <div style="background:rgba(224,122,106,0.1); border:1px solid rgba(224,122,106,0.35); border-radius:8px; padding:12px 14px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:12px">
+                <div>
+                  <div style="font-weight:600; color:#E07A6A; font-size:12.5px">Criteria Parser Error</div>
+                  <div style="font-size:12px; color:var(--text-2); margin-top:2px">${runData.error_summary || 'Validation failed'}</div>
+                </div>
+                <button class="btn btn-outline btn-reparse-action" style="border-color:rgba(224,122,106,0.5); height:28px; font-size:11.5px" type="button">
+                  Re-run Parser
+                </button>
+              </div>
+            ` : ''}
+
+            <!-- PART 3: MISSION BRIEF SECTION (Agent #2 Output) -->
+            <div style="background:var(--ink-800); border:1px solid var(--line-cu, rgba(200,140,80,0.3)); border-radius:10px; padding:14px; margin-bottom:16px">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
+                <div style="display:flex; align-items:center; gap:8px">
+                  <span style="font-size:15px">📋</span>
+                  <span style="font-size:13px; font-weight:600; color:var(--cu)">Agent #2 Mission Brief</span>
+                  <span class="badge badge-parsed" style="font-size:10px">v${criteria.parser_version || '1.0'}</span>
+                </div>
+                <div style="display:flex; gap:6px">
+                  <button class="btn btn-outline btn-copy-json" style="height:24px; padding:0 8px; font-size:11px" type="button">
+                    Copy Brief JSON
+                  </button>
+                  <button class="btn btn-outline btn-reparse-action" style="height:24px; padding:0 8px; font-size:11px" type="button">
+                    Re-run Parser
+                  </button>
+                </div>
+              </div>
+
+              ${brief ? `
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:8px; margin-bottom:12px">
+                  <div style="background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:6px">
+                    <div style="font-size:10.5px; color:var(--text-3)">Countries Policy</div>
+                    <div style="font-size:12px; font-weight:600; color:var(--text-1); margin-top:2px">
+                      ${brief.countries.mode === 'auto_potential' ? 'Auto-Potential (Agent #10)' : `${brief.countries.list.length} Selected`}
+                    </div>
+                  </div>
+                  <div style="background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:6px">
+                    <div style="font-size:10.5px; color:var(--text-3)">Approval Gate</div>
+                    <div style="font-size:12px; font-weight:600; color:var(--text-1); margin-top:2px">
+                      ${brief.approval_gate.auto_approve ? '1-Click Autonomous' : 'Pause after Discovery'}
+                    </div>
+                  </div>
+                  <div style="background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:6px">
+                    <div style="font-size:10.5px; color:var(--text-3)">Business Models</div>
+                    <div style="font-size:12px; font-weight:600; color:var(--text-1); margin-top:2px">
+                      ${(brief.business_modes || []).join(', ')}
+                    </div>
+                  </div>
+                </div>
+
+                <details style="background:var(--ink-900); border:1px solid var(--line-2); border-radius:6px; padding:8px 12px; font-size:11px">
+                  <summary style="cursor:pointer; color:var(--text-2); font-weight:600; user-select:none">
+                    View Structured Brief JSON payload
+                  </summary>
+                  <pre style="margin-top:8px; padding:8px 0; font-family:var(--font-mono, monospace); font-size:11px; line-height:1.45; color:var(--cu-light, #E2B088); max-height:220px; overflow-y:auto; white-space:pre-wrap"><code>${JSON.stringify(brief, null, 2)}</code></pre>
+                </details>
+              ` : `
+                <div style="font-size:12px; color:var(--text-3)">No brief parsed yet. Click <b>Re-run Parser</b> to generate.</div>
+              `}
+            </div>
+
+            <!-- Target Countries Tray -->
+            <div style="margin-bottom:16px">
+              <div class="section-label">Target Countries (${countries.length})</div>
+              ${countries.length === 0 ? `
+                <div style="font-size:12px; color:var(--em); padding:8px 12px; background:var(--ink-800); border:1px solid var(--line-cu); border-radius:8px">
+                  Auto-select mode active — Country Potential Intelligence Agent (#10) will populate all viable markets in Phase 1.
+                </div>
+              ` : `
+                <div style="display:flex; flex-wrap:wrap; gap:8px">
+                  ${countries.map((c) => {
+                    const flag = window.NRDCountrySelector?.getFlagEmoji(c.country_code) || '🌐';
+                    return `
+                      <div class="cs-tray-chip" style="animation:none">
+                        <span class="cs-tc-flag">${flag}</span>
+                        <span class="cs-tc-name">${c.country_name || c.country_code}</span>
+                        <span class="cs-tc-code">${c.country_code}</span>
+                        <span class="badge" style="font-size:9.5px">${(c.potential_score || 0).toFixed(1)}</span>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              `}
+            </div>
+
+            <!-- 35 Agents Status Matrix -->
+            <div>
+              <div class="section-label">35-Agent Layer Status Matrix</div>
+              <div class="agent-status-matrix">
+                ${Object.entries(layers).map(([layerKey, layerData]) => `
+                  <div class="asm-layer">
+                    <div class="asm-layer-head">
+                      <span>${layerData.name}</span>
+                      <span>${layerData.items.length} Agents</span>
+                    </div>
+                    <div class="asm-agent-list">
+                      ${layerData.items.map((ag) => `
+                        <div class="asm-agent-item">
+                          <div class="asm-agent-name" title="#${ag.agent_number} ${ag.agent_name}">
+                            <b style="color:var(--text-3); margin-right:4px">#${ag.agent_number}</b>${ag.agent_name}
+                          </div>
+                          <span class="asm-agent-pill ${ag.status === 'done' ? 'pill-done' : ag.status === 'running' ? 'pill-running' : ''}">${ag.status}</span>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
             </div>
           `;
+
+          // Event listeners for inside the modal
+          const copyBtn = mdContent.querySelector('.btn-copy-json');
+          if (copyBtn && brief) {
+            copyBtn.addEventListener('click', async () => {
+              try {
+                await navigator.clipboard.writeText(JSON.stringify(brief, null, 2));
+                copyBtn.textContent = 'Copied ✓';
+                setTimeout(() => { copyBtn.textContent = 'Copy Brief JSON'; }, 2000);
+              } catch {
+                copyBtn.textContent = 'Copied ✓';
+              }
+            });
+          }
+
+          const reparseBtns = mdContent.querySelectorAll('.btn-reparse-action');
+          reparseBtns.forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              btn.disabled = true;
+              btn.textContent = 'Parsing…';
+              try {
+                let parseRes = null;
+                if (window.dbAPI && typeof window.dbAPI.parseRun === 'function') {
+                  parseRes = await window.dbAPI.parseRun(runId);
+                } else {
+                  const res = await fetch(`/api/db/runs/${runId}/parse`, { method: 'POST' });
+                  parseRes = await res.json();
+                }
+
+                if (parseRes && parseRes.success) {
+                  if (window.NRDToast) {
+                    window.NRDToast.show({
+                      type: 'success',
+                      title: 'Mission Brief Re-parsed',
+                      msg: `Generated Brief v${parseRes.version || '1.1'}.`,
+                    });
+                  }
+                } else {
+                  if (window.NRDToast) {
+                    window.NRDToast.show({
+                      type: 'error',
+                      title: 'Parse Failed',
+                      msg: parseRes?.error || 'Validation error',
+                    });
+                  }
+                }
+
+                await renderDetails();
+                if (typeof loadRunsLedger === 'function') loadRunsLedger();
+              } catch (err) {
+                console.error('[NewResearch] Re-parse error:', err);
+                if (window.NRDToast) {
+                  window.NRDToast.show({
+                    type: 'error',
+                    title: 'Re-parse Error',
+                    msg: err.message,
+                  });
+                }
+                btn.disabled = false;
+                btn.textContent = 'Re-run Parser';
+              }
+            });
+          });
+        } catch (err) {
+          console.error('[NewResearch] Failed to load run details:', err);
+          const mdContent = modalEl.querySelector('#md-content');
+          if (mdContent) {
+            mdContent.innerHTML = `
+              <div style="color:#E07A6A; padding:20px">
+                Failed to load run details: ${err.message}
+              </div>
+            `;
+          }
         }
-      }
+      };
+
+      renderDetails();
     },
 
     destroy() {
