@@ -37,6 +37,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -52,6 +53,9 @@ jobs:
 
       - name: Resolve unique release version (auto-bump past existing tags)
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/resolve-version.mjs
 
       - name: Build & package (electron-builder → NSIS, no network publish)
@@ -61,36 +65,44 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
           VERSION=$(node -p "require('./package.json').version")
           TAG="v$VERSION"
-          echo "Publishing $TAG"
+          echo "Publishing release $TAG (version: $VERSION)..."
 
-          # Defensive: if a draft/empty release with this tag somehow exists,
-          # adopt it instead of failing.
-          gh release view "$TAG" --json isDraft -q .isDraft 2>/dev/null && \
-            echo "Release $TAG already exists — will upload assets onto it." || true
+          # Verify distribution assets exist
+          ls -la dist/
 
-          # Create the tag + release up-front so asset uploads can never race.
-          gh release create "$TAG" \
-            --title "Niche Research Department $TAG" \
-            --notes "Automated build from commit ${{ github.sha }}.
+          # Ensure the release exists and is marked as latest
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists on GitHub — updating notes and marking latest..."
+            gh release edit "$TAG" \
+              --title "Niche Research Department $TAG" \
+              --notes "Automated build from commit ${{ github.sha }}.
           - Windows installer (NSIS, x64)
           - latest.yml included for in-app auto-updates" \
-            --latest || echo "Release creation skipped (already exists)"
+              --latest
+          else
+            echo "Creating brand-new GitHub Release $TAG..."
+            gh release create "$TAG" \
+              --title "Niche Research Department $TAG" \
+              --notes "Automated build from commit ${{ github.sha }}.
+          - Windows installer (NSIS, x64)
+          - latest.yml included for in-app auto-updates" \
+              --latest
+          fi
 
-          # Upload installer + blockmap + updater metadata.
-          # Use -w only for files that exist (blockmap/latest.yml always do;
-          # glob kept defensive anyway).
+          # Upload installer + blockmap + updater metadata
           gh release upload "$TAG" \
             dist/*Setup-*.exe \
             dist/*Setup-*.exe.blockmap \
             dist/latest.yml \
             --clobber
 
-          echo "Release $TAG published:"
-          gh release view "$TAG" --json assets -q '.assets[].name'
+          echo "Release $TAG published successfully:"
+          gh release view "$TAG"
 
       - name: Upload installer artifact (always, for inspection)
         uses: actions/upload-artifact@v4

@@ -1,37 +1,33 @@
 #!/usr/bin/env node
 /**
- * resolve-version.mjs — bulletproof release versioning.
+ * resolve-version.mjs — Bulletproof release versioning and collision prevention.
  *
  * Problem it solves:
- *   electron-builder publishes a GitHub Release tagged `v{version}`. If that
- *   tag already exists (e.g. you re-run the workflow, or forgot to bump the
- *   version locally), `--publish always` fails with
- *   "release with tag vX.Y.Z already exists" — or worse, silently re-uploads
- *   onto the old release and electron-updater never shows the new build.
+ *   If a release/tag already exists on GitHub (e.g. v0.1.0, v0.1.1, v0.1.2, v0.1.3),
+ *   creating a release with an existing tag either fails or skips creating the new release.
  *
  * How it works:
- *   1. Read the version from package.json (single source of truth).
- *   2. Collect every existing release tag: local git tags + remote tags
- *      (`git ls-remote --tags`, the full truth on GitHub) +, when
- *      NRD_KNOWN_TAGS is set, a pre-seeded list (used in tests).
- *   3. While `v{version}` is taken, bump the patch number: 0.1.0 → 0.1.1 → …
- *      After 999 patch bumps it rolls the minor: 0.1.999 → 0.2.0.
- *   4. If the version changed, rewrite package.json so electron-builder,
- *      latest.yml, the installer filename and the in-app version display all
- *      agree on the SAME number.
- *
- * Usage:
- *   node scripts/resolve-version.mjs [--dry-run]
- * Env:
- *   NRD_KNOWN_TAGS  space/comma/newline-separated tag names to treat as taken
- *                   (test hook; real runs use git + ls-remote instead)
+ *   1. Collects EVERY existing release and tag across:
+ *      - GitHub Releases API (direct fetch /repos/:owner/:repo/releases)
+ *      - GitHub Tags API (direct fetch /repos/:owner/:repo/tags)
+ *      - GitHub CLI (`gh release list` if available)
+ *      - Git remote tags (`git ls-remote --tags origin`)
+ *      - Local git tags (`git tag --list`)
+ *      - NRD_KNOWN_TAGS environment variable (test override)
+ *   2. Extracts all semver numbers and determines the HIGHEST existing version (maxVersion).
+ *   3. If maxVersion >= baseVersion (from package.json), forces the candidate to bump(maxVersion).
+ *   4. While candidate tag is taken in any source, bumps the patch (or rolls minor past 999).
+ *   5. Updates package.json, package-lock.json, and app.config.json to the new unique version.
+ *   6. Exports NRD_VERSION and NRD_TAG to GitHub Actions environment.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
+const lockPath = fileURLToPath(new URL('../package-lock.json', import.meta.url));
+const configPath = fileURLToPath(new URL('../app.config.json', import.meta.url));
 
 function readVersion() {
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
@@ -43,64 +39,214 @@ function readVersion() {
 }
 
 function parseParts(v) {
-  const [maj, min, pat] = v.split('.').map(Number);
-  return { maj, min, pat };
+  const clean = String(v || '').replace(/^v/, '').trim();
+  const m = clean.match(/^(\d+)\.(\d+)\.(\d+)$/);
+  if (!m) return null;
+  return { maj: Number(m[1]), min: Number(m[2]), pat: Number(m[3]) };
 }
 
-/** Bump: patch++ unless patch would exceed 999 → minor++, patch=0 */
-function bump(v) {
-  const { maj, min, pat } = parseParts(v);
-  if (pat >= 999) return `${maj}.${min + 1}.0`;
-  return `${maj}.${min}.${pat + 1}`;
+function semverCmp(a, b) {
+  if (a.maj !== b.maj) return a.maj - b.maj;
+  if (a.min !== b.min) return a.min - b.min;
+  return a.pat - b.pat;
 }
 
-function knownTags() {
+function bump(parts) {
+  if (parts.pat >= 999) return { maj: parts.maj, min: parts.min + 1, pat: 0 };
+  return { maj: parts.maj, min: parts.min, pat: parts.pat + 1 };
+}
+
+function formatSemver(p) {
+  return `${p.maj}.${p.min}.${p.pat}`;
+}
+
+async function collectKnownTags() {
   const tags = new Set();
   const collect = (text) => {
-    for (const line of String(text).split(/\s+/)) {
-      const t = line.trim();
+    if (!text) return;
+    for (const item of String(text).split(/[\s,\n]+/)) {
+      const t = item.trim();
       if (!t) continue;
       const clean = t.replace(/^refs\/tags\//, '').replace(/\^\{\}$/, '');
-      if (/^v\d+\.\d+\.\d+/.test(clean)) tags.add(clean);
+      if (/^v?\d+\.\d+\.\d+/.test(clean)) {
+        tags.add(clean.startsWith('v') ? clean : `v${clean}`);
+      }
     }
   };
 
-  // Pre-seeded tags (tests / manual override)
+  // 1. Env hook (for tests / manual override)
   if (process.env.NRD_KNOWN_TAGS) {
     collect(process.env.NRD_KNOWN_TAGS);
-  } else {
-    // Local tags
-    try {
-      collect(execFileSync('git', ['tag', '--list'], { encoding: 'utf8' }));
-    } catch { /* not a git repo / git missing → ignore */ }
-    // Remote tags — the authoritative list on GitHub
-    try {
-      collect(execFileSync('git', ['ls-remote', '--tags', 'origin'], { encoding: 'utf8', timeout: 30_000 }));
-    } catch { /* no remote yet → local tags are the best we know */ }
+    return tags;
   }
+
+  // Resolve repository coordinates
+  let owner = 'ahsantalks0-cmyk';
+  let repo = 'Niche-Research-';
+  if (process.env.GITHUB_REPOSITORY && process.env.GITHUB_REPOSITORY.includes('/')) {
+    [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
+  } else if (existsSync(configPath)) {
+    try {
+      const cfg = JSON.parse(readFileSync(configPath, 'utf8'));
+      if (cfg.github?.owner && cfg.github?.repo) {
+        owner = cfg.github.owner;
+        repo = cfg.github.repo;
+      }
+    } catch { /* ignore */ }
+  }
+
+  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+  const headers = {
+    'User-Agent': 'NRD-Release-Resolver',
+    'Accept': 'application/vnd.github+json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  // 2. Direct GitHub API Releases query
+  try {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases?per_page=100`, { headers });
+    if (res.ok) {
+      const releases = await res.json();
+      if (Array.isArray(releases)) {
+        for (const r of releases) {
+          if (r.tag_name) collect(r.tag_name);
+          if (r.name && /^v?\d+\.\d+\.\d+/.test(r.name)) collect(r.name);
+        }
+      }
+    }
+  } catch { /* API offline / network isolated */ }
+
+  // 3. Direct GitHub API Tags query
+  try {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/tags?per_page=100`, { headers });
+    if (res.ok) {
+      const apiTags = await res.json();
+      if (Array.isArray(apiTags)) {
+        for (const t of apiTags) {
+          if (t.name) collect(t.name);
+        }
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 4. GitHub CLI (if available in runner environment)
+  try {
+    const out = execFileSync('gh', ['release', 'list', '--repo', `${owner}/${repo}`, '--limit', '1000', '--json', 'tagName', '-q', '.[].tagName'], {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+      timeout: 15_000,
+    });
+    collect(out);
+  } catch { /* gh not present or not logged in */ }
+
+  // 5. Remote git tags via git ls-remote
+  try {
+    const out = execFileSync('git', ['ls-remote', '--tags', 'origin'], {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+      timeout: 25_000,
+    });
+    collect(out);
+  } catch { /* remote unreachable */ }
+
+  // 6. Local git tags
+  try {
+    const out = execFileSync('git', ['tag', '--list'], {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+    collect(out);
+  } catch { /* not in git repo */ }
+
   return tags;
 }
 
-const base = readVersion();
-const taken = knownTags();
-let version = base;
-let bumped = 0;
-while (taken.has(`v${version}`) && bumped < 5000) {
-  version = bump(version);
-  bumped++;
-}
+async function run() {
+  const baseStr = readVersion();
+  const baseSemver = parseParts(baseStr);
+  const taken = await collectKnownTags();
 
-if (DRY_RUN) {
-  console.log(`base=${base} resolved=${version} bumps=${bumped} knownTags=${[...taken].join(',') || '(none)'}`);
-  process.exit(0);
-}
+  // Find highest existing semver across all known releases/tags
+  let maxSemver = null;
+  for (const tag of taken) {
+    const parsed = parseParts(tag);
+    if (!parsed) continue;
+    if (!maxSemver || semverCmp(parsed, maxSemver) > 0) {
+      maxSemver = parsed;
+    }
+  }
 
-if (bumped > 0) {
+  // If existing releases/tags exist that are >= base, force candidate to start after maxSemver
+  let candidate = baseSemver;
+  if (maxSemver && semverCmp(maxSemver, baseSemver) >= 0) {
+    candidate = bump(maxSemver);
+  }
+
+  // Ensure candidate tag is completely free
+  let bumped = 0;
+  while ((taken.has(`v${formatSemver(candidate)}`) || taken.has(formatSemver(candidate))) && bumped < 5000) {
+    candidate = bump(candidate);
+    bumped++;
+  }
+
+  const version = formatSemver(candidate);
+  const tag = `v${version}`;
+
+  console.log(`▸ Base package version:     ${baseStr}`);
+  console.log(`▸ Highest existing release:  ${maxSemver ? 'v' + formatSemver(maxSemver) : '(none)'}`);
+  console.log(`▸ Total existing tags seen:  ${taken.size} (${[...taken].sort().join(', ') || 'none'})`);
+  console.log(`▸ Target new release version: ${version} (Tag: ${tag})`);
+
+  if (DRY_RUN) {
+    console.log(`[dry-run] base=${baseStr} max=${maxSemver ? formatSemver(maxSemver) : 'none'} resolved=${version}`);
+    process.exit(0);
+  }
+
+  // Update package.json
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
   pkg.version = version;
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8');
-  console.log(`▸ Tag v${base} already exists → version auto-bumped to ${version} (skipped ${bumped} taken tag${bumped === 1 ? '' : 's'})`);
-} else {
-  console.log(`▸ Version ${version} is free (tag v${version} not taken) — no bump needed`);
+
+  // Update package-lock.json version fields if present
+  if (existsSync(lockPath)) {
+    try {
+      const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
+      lock.version = version;
+      if (lock.packages && lock.packages['']) {
+        lock.packages[''].version = version;
+      }
+      writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`, 'utf8');
+    } catch { /* ignore lock update error */ }
+  }
+
+  // Update app.config.json if present
+  if (existsSync(configPath)) {
+    try {
+      const cfg = JSON.parse(readFileSync(configPath, 'utf8'));
+      if (cfg.app) {
+        cfg.app.version = version;
+        writeFileSync(configPath, `${JSON.stringify(cfg, null, 2)}\n`, 'utf8');
+      }
+    } catch { /* ignore config update error */ }
+  }
+
+  // Export to GitHub Actions environment
+  if (process.env.GITHUB_ENV) {
+    try {
+      appendFileSync(process.env.GITHUB_ENV, `NRD_VERSION=${version}\nNRD_TAG=${tag}\n`, 'utf8');
+    } catch { /* ignore */ }
+  }
+  if (process.env.GITHUB_OUTPUT) {
+    try {
+      appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\ntag=${tag}\n`, 'utf8');
+    } catch { /* ignore */ }
+  }
+
+  console.log(`NRD_VERSION=${version}`);
+  console.log(`NRD_TAG=${tag}`);
 }
-console.log(`NRD_VERSION=${version}`);
+
+run().catch((err) => {
+  console.error('✗ Failed to resolve version:', err);
+  process.exit(1);
+});

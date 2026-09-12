@@ -3,7 +3,7 @@
     "name": "Niche Research Department",
     "shortName": "NRD",
     "tagline": "Agentic Intelligence for Niche Discovery",
-    "version": "0.1.0"
+    "version": "0.1.4"
   },
   "window": {
     "width": 1400,
