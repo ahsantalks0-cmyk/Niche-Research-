@@ -2,7 +2,15 @@ name: Build & Release
 
 # Every push to main → build the Windows installer → publish a GitHub Release
 # (with the .exe + latest.yml) so the in-app electron-updater can find it.
-# Tag = v{version} from package.json. Bump the version to ship a new release.
+#
+# ANTI-COLLISION VERSIONING:
+#   The "Resolve unique release version" step checks every existing tag
+#   (local + `git ls-remote` on the remote) and, if v{version} is already
+#   taken, auto-bumps the patch number (0.1.0 → 0.1.1 → …) and rewrites
+#   package.json BEFORE electron-builder runs. So `--publish always` can
+#   never hit "release with tag vX.Y.Z already exists" and a new release is
+#   always visible to electron-updater. Re-running the workflow always
+#   produces the NEXT version, never a duplicate.
 
 on:
   push:
@@ -21,8 +29,10 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout (full history — needed for tag collision detection)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -47,7 +57,17 @@ jobs:
           Set-Content app.config.json
           Write-Host "Publish target: $owner/$repo"
 
-      - name: Build & package (electron-builder → NSIS)
+      - name: Resolve unique release version (auto-bump past existing tags)
+        shell: bash
+        run: node scripts/resolve-version.mjs
+
+      - name: Show resolved version
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json | ConvertFrom-Json).version
+          Write-Host "::notice::Releasing v$v — installer: Niche Research Department-Setup-$v.exe"
+
+      - name: Build & package (electron-builder → NSIS → GitHub Release)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --win nsis --publish always
