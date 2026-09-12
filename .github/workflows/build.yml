@@ -94,10 +94,10 @@ jobs:
               --latest
           fi
 
-          # Upload installer + blockmap + updater metadata
+          # Upload installer + blockmap + updater metadata (using find/glob expansion)
           gh release upload "$TAG" \
-            dist/*Setup-*.exe \
-            dist/*Setup-*.exe.blockmap \
+            dist/*.exe \
+            dist/*.blockmap \
             dist/latest.yml \
             --clobber
 

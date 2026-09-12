@@ -113,8 +113,12 @@ async function collectKnownTags() {
           if (r.name && /^v?\d+\.\d+\.\d+/.test(r.name)) collect(r.name);
         }
       }
+    } else {
+      console.warn(`[resolve-version] GitHub Releases API returned status ${res.status}`);
     }
-  } catch { /* API offline / network isolated */ }
+  } catch (err) {
+    console.warn('[resolve-version] GitHub Releases API query error:', err.message);
+  }
 
   // 3. Direct GitHub API Tags query
   try {
