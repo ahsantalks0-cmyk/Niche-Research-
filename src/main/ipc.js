@@ -159,6 +159,15 @@ function registerEngineIpc(mainWindow) {
     return db.getTimingLogs(options || {});
   });
 
+  // Quality Supervisor (P1.3)
+  ipcMain.handle('engine:get-quality-reviews', (_e, runId, options) => {
+    return db.getQualityReviews(runId || null, options || {});
+  });
+
+  ipcMain.handle('engine:get-quality-summary', (_e, runId) => {
+    return db.getQualitySummary(runId);
+  });
+
   // Browser Operations
   ipcMain.handle('engine:search-google', (_e, params) => {
     return browserEngine.searchGoogle(params);

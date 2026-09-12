@@ -204,6 +204,26 @@ app.get('/api/engine/timing-logs', (req, res) => {
   }
 });
 
+app.get('/api/engine/quality-reviews', (req, res) => {
+  try {
+    const runId = req.query.runId ? Number(req.query.runId) : null;
+    const options = { limit: req.query.limit ? Number(req.query.limit) : 100 };
+    res.json(db.getQualityReviews(runId, options));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/engine/quality-summary', (req, res) => {
+  try {
+    const runId = Number(req.query.runId);
+    if (!runId) return res.status(400).json({ error: 'runId parameter is required' });
+    res.json(db.getQualitySummary(runId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/db/crud/:action', (req, res) => {
   try {
     const { action } = req.params;

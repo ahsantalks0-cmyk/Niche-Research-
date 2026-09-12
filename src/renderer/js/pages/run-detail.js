@@ -12,6 +12,7 @@
   let currentRunId = null;
   let runData = null;
   let timingData = null;
+  let qualityData = null;
   let jsonExpanded = false;
 
   const PHASES = [
@@ -86,8 +87,13 @@
     if (!currentRunId || !window.dbAPI) return;
     try {
       runData = await window.dbAPI.getRun(currentRunId);
-      if (window.engineAPI && window.engineAPI.getTimingSummary) {
-        timingData = await window.engineAPI.getTimingSummary(currentRunId);
+      if (window.engineAPI) {
+        if (window.engineAPI.getTimingSummary) {
+          timingData = await window.engineAPI.getTimingSummary(currentRunId);
+        }
+        if (window.engineAPI.getQualitySummary) {
+          qualityData = await window.engineAPI.getQualitySummary(currentRunId);
+        }
       }
       renderView();
     } catch (err) {
@@ -273,6 +279,70 @@
             </div>
           ` : `
             <div class="feed-idle">No agent active currently.</div>
+          `}
+        </div>
+      </div>
+
+      <!-- 5. QUALITY SUPERVISOR PANEL (P1.3) -->
+      <div class="panel mc-qs-panel">
+        <div class="panel-head">
+          <div class="ph-title">${NRDIcons.get('shield')} Quality Supervisor Agent #3 (Department Shadow Inspector)</div>
+          <span class="ph-sub">Stage 1 Deterministic Audit & Stage 2 Gemini Semantic Review</span>
+        </div>
+
+        <div class="qs-stats-grid">
+          <div class="qs-card">
+            <div class="qs-val">${qualityData ? qualityData.totalReviews : 0}</div>
+            <div class="qs-label">Total Audit Reviews</div>
+          </div>
+          <div class="qs-card">
+            <div class="qs-val text-success">${qualityData ? qualityData.passRatePct : 100}%</div>
+            <div class="qs-label">Quality Pass Rate</div>
+          </div>
+          <div class="qs-card">
+            <div class="qs-val text-warning">${qualityData ? qualityData.totalSendBacks : 0}</div>
+            <div class="qs-label">Send-Back Retries</div>
+          </div>
+          <div class="qs-card">
+            <div class="qs-val text-danger">${qualityData ? qualityData.totalEscalated : 0}</div>
+            <div class="qs-label">Escalations</div>
+          </div>
+        </div>
+
+        ${qualityData && (qualityData.topFailedRules?.length > 0 || qualityData.topFailedAgents?.length > 0) ? `
+          <div class="qs-failure-patterns-box">
+            <strong class="text-warning">⚠️ Failure Pattern Summary:</strong>
+            <div class="qs-patterns-list">
+              ${(qualityData.topFailedAgents || []).map((a) => `
+                <span class="qs-pattern-badge">Agent #${a.agent_number} send-backs (${a.fail_count}x)</span>
+              `).join('')}
+              ${(qualityData.topFailedRules || []).map((r) => `
+                <span class="qs-pattern-badge">${r.rule} (${r.count}x)</span>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="qs-feed-box">
+          <h4 style="font-size:13px; font-weight:600; margin-bottom:8px">Live Audit Verdict Stream</h4>
+          ${qualityData && qualityData.recentReviews && qualityData.recentReviews.length > 0 ? `
+            <div class="qs-verdict-list">
+              ${qualityData.recentReviews.map((rev) => `
+                <div class="qs-verdict-item verdict-${rev.verdict}">
+                  <span class="qv-icon">${rev.verdict === 'pass' ? '✅' : rev.verdict === 'send_back' ? '🔁' : '🚨'}</span>
+                  <div class="qv-body">
+                    <div class="qv-top">
+                      <strong>Agent #${rev.agent_number} Output ${rev.verdict.toUpperCase()}</strong>
+                      <span class="qv-round">(Round ${rev.review_round})</span>
+                      <span class="qv-time">${formatTime(rev.created_at)}</span>
+                    </div>
+                    <div class="qv-feedback">${rev.feedback_text || 'Audit passed successfully'}</div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          ` : `
+            <div class="qs-empty-feed">No quality reviews recorded yet for this run.</div>
           `}
         </div>
       </div>

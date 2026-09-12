@@ -245,6 +245,22 @@
           return [];
         }
       },
+      getQualityReviews: async (runId, options = {}) => {
+        try {
+          const res = await fetch(`/api/engine/quality-reviews?runId=${runId || ''}&limit=${options.limit || 100}`);
+          return await res.json();
+        } catch {
+          return [];
+        }
+      },
+      getQualitySummary: async (runId) => {
+        try {
+          const res = await fetch(`/api/engine/quality-summary?runId=${runId || ''}`);
+          return await res.json();
+        } catch {
+          return { totalReviews: 0, totalPassed: 0, totalSendBacks: 0, totalEscalated: 0, passRatePct: 100, recentReviews: [], topFailedAgents: [], topFailedRules: [] };
+        }
+      },
       searchGoogle: async () => ({ results: [], cached: true }),
       startRun: async (runId, options) => {
         const res = await fetch(`/api/engine/runs/${runId}/start`, {

@@ -14,12 +14,14 @@ const migrationV1 = require('./migrations/v1');
 const migrationV2 = require('./migrations/v2');
 const migrationV3 = require('./migrations/v3');
 const migrationV4 = require('./migrations/v4');
+const migrationV5 = require('./migrations/v5');
 
 const MIGRATIONS = [
   migrationV1,
   migrationV2,
   migrationV3,
   migrationV4,
+  migrationV5,
 ];
 
 let _db = null;
@@ -968,6 +970,144 @@ function getTimingLogs(options = {}) {
   return db.prepare(sql).all(...params);
 }
 
+/* ══════════════════════════════════════════════════════════════
+   QUALITY SUPERVISOR REVIEWS
+   ══════════════════════════════════════════════════════════════ */
+
+/**
+ * Inserts a quality review record.
+ * @param {object} reviewData
+ */
+function insertQualityReview(reviewData) {
+  const db = getDb();
+  const stmt = db.prepare(`
+    INSERT INTO quality_reviews (
+      run_id, agent_number, review_round, stage1_verdict,
+      stage2_verdict, verdict, failed_rules_json, feedback_text, duration_ms
+    ) VALUES (
+      ?, ?, ?, ?,
+      ?, ?, ?, ?, ?
+    )
+  `);
+
+  const info = stmt.run(
+    reviewData.run_id,
+    reviewData.agent_number,
+    reviewData.review_round || 1,
+    reviewData.stage1_verdict || 'pass',
+    reviewData.stage2_verdict || null,
+    reviewData.verdict || 'pass',
+    typeof reviewData.failed_rules_json === 'object'
+      ? JSON.stringify(reviewData.failed_rules_json)
+      : reviewData.failed_rules_json || null,
+    reviewData.feedback_text || null,
+    Math.round(reviewData.duration_ms || 0)
+  );
+
+  return info.lastInsertRowid;
+}
+
+/**
+ * Retrieves quality review records for a run.
+ * @param {number} [runId]
+ * @param {object} [options]
+ * @returns {Array<object>}
+ */
+function getQualityReviews(runId, options = {}) {
+  const db = getDb();
+  const limit = Math.min(Number(options.limit) || 100, 500);
+  let sql = 'SELECT * FROM quality_reviews';
+  const params = [];
+
+  if (runId) {
+    sql += ' WHERE run_id = ?';
+    params.push(runId);
+  }
+
+  sql += ' ORDER BY id DESC LIMIT ?';
+  params.push(limit);
+
+  const rows = db.prepare(sql).all(...params);
+  return rows.map((r) => {
+    let failedRules = [];
+    try {
+      if (r.failed_rules_json) failedRules = JSON.parse(r.failed_rules_json);
+    } catch {}
+    return {
+      ...r,
+      failed_rules: failedRules,
+    };
+  });
+}
+
+/**
+ * Aggregates Quality Supervisor review summary statistics for a run.
+ * @param {number} runId
+ * @returns {object}
+ */
+function getQualitySummary(runId) {
+  const db = getDb();
+  const runIdNum = Number(runId);
+
+  const totals = db.prepare(`
+    SELECT
+      COUNT(*) as total_reviews,
+      COALESCE(SUM(CASE WHEN verdict = 'pass' THEN 1 ELSE 0 END), 0) as total_passed,
+      COALESCE(SUM(CASE WHEN verdict = 'send_back' THEN 1 ELSE 0 END), 0) as total_send_backs,
+      COALESCE(SUM(CASE WHEN verdict = 'escalated' THEN 1 ELSE 0 END), 0) as total_escalated
+    FROM quality_reviews
+    WHERE run_id = ?
+  `).get(runIdNum);
+
+  const recentReviews = getQualityReviews(runIdNum, { limit: 20 });
+
+  const agentFailures = db.prepare(`
+    SELECT agent_number, COUNT(*) as fail_count
+    FROM quality_reviews
+    WHERE run_id = ? AND verdict IN ('send_back', 'escalated')
+    GROUP BY agent_number
+    ORDER BY fail_count DESC
+  `).all(runIdNum);
+
+  const allReviews = db.prepare(`
+    SELECT failed_rules_json FROM quality_reviews
+    WHERE run_id = ? AND failed_rules_json IS NOT NULL
+  `).all(runIdNum);
+
+  const ruleCounts = {};
+  for (const row of allReviews) {
+    try {
+      const parsed = JSON.parse(row.failed_rules_json);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          const ruleKey = item.rule || 'UNKNOWN';
+          ruleCounts[ruleKey] = (ruleCounts[ruleKey] || 0) + 1;
+        }
+      }
+    } catch {}
+  }
+
+  const topFailedRules = Object.entries(ruleCounts)
+    .map(([rule, count]) => ({ rule, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const totalReviews = totals ? totals.total_reviews : 0;
+  const totalPassed = totals ? totals.total_passed : 0;
+  const passRatePct = totalReviews > 0 ? Math.round((totalPassed / totalReviews) * 100) : 100;
+
+  return {
+    runId: runIdNum,
+    totalReviews,
+    totalPassed,
+    totalSendBacks: totals ? totals.total_send_backs : 0,
+    totalEscalated: totals ? totals.total_escalated : 0,
+    passRatePct,
+    recentReviews,
+    topFailedAgents: agentFailures,
+    topFailedRules,
+  };
+}
+
 module.exports = {
   getDbPath,
   getDb,
@@ -998,4 +1138,7 @@ module.exports = {
   logTiming,
   getTimingSummary,
   getTimingLogs,
+  insertQualityReview,
+  getQualityReviews,
+  getQualitySummary,
 };

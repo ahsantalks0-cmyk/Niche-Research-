@@ -2996,6 +2996,94 @@ textarea.input { height: auto; min-height: 96px; padding: 12px 14px; resize: non
   background: rgba(245, 158, 11, 0.15);
 }
 
+/* =========================== Quality Supervisor (P1.3) =========================== */
+
+.qs-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.qs-card {
+  background: var(--ink-800);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 12px 16px;
+  text-align: center;
+}
+
+.qs-val {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+.qs-label {
+  font-size: 11px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+.qs-failure-patterns-box {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--r);
+  padding: 10px 14px;
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+
+.qs-patterns-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.qs-pattern-badge {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.qs-verdict-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.qs-verdict-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--ink-800);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-size: 12px;
+}
+
+.qs-verdict-item.verdict-pass { border-left: 3px solid var(--ok); }
+.qs-verdict-item.verdict-send_back { border-left: 3px solid var(--warn); }
+.qs-verdict-item.verdict-escalated { border-left: 3px solid var(--bad); }
+
+.qv-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.qv-body { flex: 1; }
+.qv-top { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.qv-round { color: var(--text-3); font-size: 11px; }
+.qv-time { margin-left: auto; color: var(--text-3); font-size: 10.5px; }
+.qv-feedback { color: var(--text-2); font-size: 11.5px; line-height: 1.4; }
+.qs-empty-feed { color: var(--text-3); font-size: 12px; font-style: italic; text-align: center; padding: 16px 0; }
+
 /* =============================== responsive ================================= */
 
 @media (max-width: 1240px) {

@@ -208,10 +208,13 @@ function buildPlan(runId) {
     : `${nicheQuantity} × auto countries`;
 
   // 8. Construct the Master Execution Plan
+  const allNodes = [...discoveryAgents, ...deepResearchAgents, ...scoringAgents, ...qaReportingAgents];
   const plan = {
     plan_version: '1.0',
     run_id: Number(runId),
     input_mode: inputMode,
+    estimated_scope: totalUnits,
+    agent_nodes: allNodes,
     plan_summary: {
       total_phases: 4,
       discovery_agent_count: discoveryAgents.length,

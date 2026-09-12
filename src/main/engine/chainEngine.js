@@ -31,6 +31,15 @@ const { EventEmitter } = require('node:events');
 const db = require('../db');
 const agentRegistry = require('./agentRegistry');
 
+// Ensure registered agents (1–3) are loaded into Agent Registry
+try {
+  require('../agents/criteriaParser');
+  require('../agents/departmentHead');
+  require('../agents/qualitySupervisor');
+} catch {
+  // Graceful fallback if agent files are initialized out of order in test runners
+}
+
 class ChainEngine extends EventEmitter {
   constructor() {
     super();
@@ -86,12 +95,12 @@ class ChainEngine extends EventEmitter {
     let criteriaRow = dbInstance.prepare('SELECT * FROM run_criteria WHERE run_id = ?').get(runIdNum);
     if (!criteriaRow || !criteriaRow.parsed_brief) {
       engine.log('info', `📋 Chain Engine: Triggering Agent #2 (Criteria Parser) for Run #${runIdNum}…`);
-      const { parseRun } = require('../agents/criteriaParser');
-      const parseResult = parseRun(runIdNum);
-      if (!parseResult.success) {
+      const ag2Spec = { number: 2, name: 'Criteria Parser Agent', critical: true };
+      const parseResult = await this._executeAgentWithRetry(runIdNum, ag2Spec);
+      if (parseResult?.failed || parseResult?.error) {
         dbInstance.prepare(`UPDATE research_runs SET status = 'failed', error_summary = ? WHERE id = ?`)
-          .run(parseResult.error || 'Criteria parse failed', runIdNum);
-        return { success: false, status: 'failed', error: parseResult.error };
+          .run(parseResult?.error || 'Criteria parse failed', runIdNum);
+        return { success: false, status: 'failed', error: parseResult?.error };
       }
     }
 
@@ -107,8 +116,14 @@ class ChainEngine extends EventEmitter {
 
     if (!plan) {
       engine.log('info', `👑 Chain Engine: Triggering Agent #1 (Department Head) for Run #${runIdNum}…`);
-      const { buildPlan } = require('../agents/departmentHead');
-      plan = buildPlan(runIdNum);
+      const ag1Spec = { number: 1, name: 'Department Head Agent', critical: true };
+      await this._executeAgentWithRetry(runIdNum, ag1Spec);
+      const runRefreshed = dbInstance.prepare('SELECT dh_execution_plan FROM research_runs WHERE id = ?').get(runIdNum);
+      try {
+        plan = typeof runRefreshed?.dh_execution_plan === 'string' ? JSON.parse(runRefreshed.dh_execution_plan) : runRefreshed?.dh_execution_plan;
+      } catch {
+        plan = null;
+      }
     }
 
     // Mark active in memory
@@ -300,11 +315,14 @@ class ChainEngine extends EventEmitter {
       return { skipped: true, reason: 'pending_implementation' };
     }
 
-    // Agent is registered! Execute with retry policy
+    // Agent is registered! Execute with retry policy and Quality Supervisor interceptor
     const regAgent = agentRegistry.get(agentNum);
+    const qualitySupervisor = require('../agents/qualitySupervisor');
     const maxRetries = 2;
     let attempt = 0;
     let lastErr = null;
+    let reviewRound = 1;
+    let currentQsFeedback = null;
 
     const startedAt = new Date().toISOString();
     const t0 = Date.now();
@@ -319,15 +337,114 @@ class ChainEngine extends EventEmitter {
 
         this.emitAgentUpdate(runId, agentNum, 'running');
 
-        engine.log('info', `🤖 Chain Engine: Invoking Agent #${agentNum} (${regAgent.name}) [attempt ${attempt + 1}/${maxRetries + 1}]…`);
+        const logMsg = currentQsFeedback
+          ? `🤖 Chain Engine: Re-invoking Agent #${agentNum} (${regAgent.name}) [QS Send-back Round ${reviewRound - 1}]…`
+          : `🤖 Chain Engine: Invoking Agent #${agentNum} (${regAgent.name}) [attempt ${attempt + 1}/${maxRetries + 1}]…`;
+        engine.log('info', logMsg);
 
-        const result = await regAgent.handler({
+        const runRow = dbInstance.prepare('SELECT * FROM research_runs WHERE id = ?').get(runId);
+        const criteriaRow = dbInstance.prepare('SELECT * FROM run_criteria WHERE run_id = ?').get(runId);
+        let parsedBrief = null;
+        try {
+          if (criteriaRow && criteriaRow.parsed_brief) {
+            parsedBrief = JSON.parse(criteriaRow.parsed_brief);
+          }
+        } catch {
+          // ignore
+        }
+
+        const context = {
           runId,
           agentNumber: agentNum,
           spec: agentSpec,
           db: dbInstance,
           engine,
-        });
+          run: runRow,
+          brief: parsedBrief,
+          qs_feedback: currentQsFeedback,
+        };
+
+        const result = await regAgent.handler(context);
+
+        // Quality Supervisor Interceptor (Agent #3 does NOT review itself)
+        if (agentNum !== 3 && !result?.skipped) {
+          const qsReview = await qualitySupervisor.reviewOutput({
+            runId,
+            agentNumber: agentNum,
+            output: result,
+            context,
+            reviewRound,
+            engine,
+          });
+
+          if (qsReview.verdict === 'send_back') {
+            // Check run-level safety valve (max 10 total send-backs per run)
+            const totalRunSendbacks = dbInstance.prepare(`
+              SELECT COUNT(*) as count FROM quality_reviews
+              WHERE run_id = ? AND verdict = 'send_back'
+            `).get(runId)?.count || 0;
+
+            if (totalRunSendbacks >= 10) {
+              engine.log('warn', `🛑 Quality Supervisor: Max 10 total send-backs reached for Run #${runId}. Halting execution.`);
+              dbInstance.prepare(`
+                UPDATE research_runs 
+                SET status = 'paused', updated_at = datetime('now')
+                WHERE id = ?
+              `).run(runId);
+
+              dbInstance.prepare(`
+                UPDATE agent_status 
+                SET status = 'retrying', output_summary = 'QS safety valve triggered: max 10 total send-backs reached. Run paused.', updated_at = datetime('now')
+                WHERE run_id = ? AND agent_number = ?
+              `).run(runId, agentNum);
+
+              this.emitStatusUpdate(runId, 'paused');
+              this.emitAgentUpdate(runId, agentNum, 'retrying');
+              return { sendBack: true, paused: true, reason: 'max_run_sendbacks' };
+            }
+
+            // Check agent-level send-back count (max 2 send-backs per agent per run)
+            const agentSendbacks = dbInstance.prepare(`
+              SELECT COUNT(*) as count FROM quality_reviews
+              WHERE run_id = ? AND agent_number = ? AND verdict = 'send_back'
+            `).get(runId, agentNum)?.count || 0;
+
+            if (agentSendbacks <= 2) {
+              reviewRound++;
+              currentQsFeedback = qsReview.feedback;
+
+              dbInstance.prepare(`
+                UPDATE agent_status 
+                SET status = 'retrying', output_summary = ?, updated_at = datetime('now')
+                WHERE run_id = ? AND agent_number = ?
+              `).run(`QS send-back round ${agentSendbacks}: ${qsReview.feedback}`, runId, agentNum);
+
+              this.emitAgentUpdate(runId, agentNum, 'retrying');
+              await new Promise((r) => setTimeout(r, 200));
+              continue;
+            } else {
+              qsReview.verdict = 'escalated';
+            }
+          }
+
+          if (qsReview.verdict === 'escalated') {
+            const finishedAt = new Date().toISOString();
+            dbInstance.prepare(`
+              UPDATE agent_status 
+              SET status = 'failed', finished_at = ?, output_summary = ?, updated_at = datetime('now')
+              WHERE run_id = ? AND agent_number = ?
+            `).run(finishedAt, `QS escalated after 2 send-backs: ${qsReview.feedback}`, runId, agentNum);
+
+            this.emitAgentUpdate(runId, agentNum, 'failed');
+
+            if (isCritical || regAgent.meta?.isCritical) {
+              throw new Error(`Critical Agent #${agentNum} (${agentSpec.name}) escalated by Quality Supervisor: ${qsReview.feedback}`);
+            } else {
+              engine.log('warn', `⚠️ Non-critical Agent #${agentNum} escalated by QS. Proceeding with remaining chain.`);
+              return { failed: true, escalated: true, error: qsReview.feedback };
+            }
+          }
+        }
 
         const finishedAt = new Date().toISOString();
         const durationMs = Date.now() - t0;
@@ -351,6 +468,22 @@ class ChainEngine extends EventEmitter {
 
         this.emitAgentUpdate(runId, agentNum, 'done');
 
+        // Also update Agent #3 (Quality Supervisor) status row
+        try {
+          const summary = db.getQualitySummary(runId);
+          dbInstance.prepare(`
+            UPDATE agent_status
+            SET status = 'done',
+                finished_at = ?,
+                output_summary = ?,
+                updated_at = datetime('now')
+            WHERE run_id = ? AND agent_number = 3
+          `).run(finishedAt, `QS Active: ${summary.totalPassed}/${summary.totalReviews} passed, ${summary.totalSendBacks} send-backs`, runId);
+          this.emitAgentUpdate(runId, 3, 'done');
+        } catch {
+          // ignore
+        }
+
         // Log timing
         try {
           db.insert('timing_logs', {
@@ -364,7 +497,7 @@ class ChainEngine extends EventEmitter {
             cache_hit: 0,
           });
         } catch {
-          // ignore timing write failures
+          // ignore
         }
 
         return result;
