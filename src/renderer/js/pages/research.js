@@ -967,7 +967,7 @@
     },
 
     /**
-     * Shows detailed modal with SQLite run criteria & 35-agent status matrix
+     * Shows detailed modal with SQLite run criteria, DH Execution Plan, Live Agent Feed & 35-agent status matrix
      */
     async showRunDetailModal(runId) {
       const modalRoot = document.getElementById('research-modal-root');
@@ -976,22 +976,37 @@
       const modalEl = document.createElement('div');
       modalEl.className = 'modal-backdrop';
       modalEl.innerHTML = `
-        <div class="modal-dialog" style="max-width:820px">
-          <div class="modal-header">
+        <div class="modal-dialog" style="max-width:960px; max-height:90vh; display:flex; flex-direction:column">
+          <div class="modal-header" style="flex-shrink:0">
             <div>
-              <div class="modal-title">Run #${runId} Details & Mission Brief</div>
-              <div class="modal-subtitle">Inspecting record from SQLite <code>research_runs</code>, <code>run_criteria</code>, and <code>agent_status</code>.</div>
+              <div class="modal-title" style="display:flex; align-items:center; gap:8px">
+                <span>Run #${runId} Mission Control & Execution</span>
+                <span id="md-header-status"></span>
+              </div>
+              <div class="modal-subtitle">Orchestrated by Department Head (Agent #1) • Autonomous 35-Agent Pipeline</div>
             </div>
-            <button class="modal-close-btn" id="md-btn-close">✕</button>
+            <div style="display:flex; align-items:center; gap:8px">
+              <div id="md-header-actions" style="display:flex; gap:6px"></div>
+              <button class="modal-close-btn" id="md-btn-close">✕</button>
+            </div>
           </div>
-          <div id="md-content" style="padding:20px 0; text-align:center; color:var(--text-3)">
+          <div id="md-content" style="padding:16px 0; overflow-y:auto; flex:1; text-align:center; color:var(--text-3)">
             Loading run telemetry from database…
           </div>
         </div>
       `;
 
       modalRoot.appendChild(modalEl);
-      const closeModal = () => modalEl.remove();
+
+      let unsubscribeRunStatus = null;
+      let unsubscribeAgentStatus = null;
+
+      const closeModal = () => {
+        if (typeof unsubscribeRunStatus === 'function') unsubscribeRunStatus();
+        if (typeof unsubscribeAgentStatus === 'function') unsubscribeAgentStatus();
+        modalEl.remove();
+      };
+
       modalEl.querySelector('#md-btn-close').addEventListener('click', closeModal);
       modalEl.addEventListener('click', (e) => {
         if (e.target === modalEl) closeModal();
@@ -1012,12 +1027,60 @@
           }
 
           const mdContent = modalEl.querySelector('#md-content');
+          const headerStatus = modalEl.querySelector('#md-header-status');
+          const headerActions = modalEl.querySelector('#md-header-actions');
           if (!mdContent) return;
+
+          if (headerStatus) {
+            headerStatus.innerHTML = `<span class="run-status-pill status-${runData.status}">${runData.status}</span>`;
+          }
+
+          // Top Header Action Controls based on state
+          if (headerActions) {
+            let actionButtonsHtml = '';
+            if (['draft', 'ready', 'failed'].includes(runData.status)) {
+              actionButtonsHtml += `
+                <button class="btn btn-primary btn-mc-start" style="height:28px; padding:0 12px; font-size:11.5px; font-weight:600" type="button">
+                  ▶ Start Research Chain
+                </button>
+              `;
+            } else if (runData.status === 'running') {
+              actionButtonsHtml += `
+                <button class="btn btn-outline btn-mc-pause" style="height:28px; padding:0 10px; font-size:11.5px; color:#E5C07B; border-color:rgba(229,192,123,0.4)" type="button">
+                  ⏸ Pause
+                </button>
+                <button class="btn btn-outline btn-mc-cancel" style="height:28px; padding:0 10px; font-size:11.5px; color:#E07A6A; border-color:rgba(224,122,106,0.4)" type="button">
+                  ⏹ Cancel
+                </button>
+              `;
+            } else if (runData.status === 'paused') {
+              actionButtonsHtml += `
+                <button class="btn btn-primary btn-mc-start" style="height:28px; padding:0 12px; font-size:11.5px; font-weight:600" type="button">
+                  ▶ Resume Chain
+                </button>
+                <button class="btn btn-outline btn-mc-cancel" style="height:28px; padding:0 10px; font-size:11.5px; color:#E07A6A; border-color:rgba(224,122,106,0.4)" type="button">
+                  ⏹ Cancel
+                </button>
+              `;
+            } else if (runData.status === 'awaiting_approval') {
+              actionButtonsHtml += `
+                <button class="btn btn-primary btn-mc-approve" style="height:28px; padding:0 12px; font-size:11.5px; font-weight:600; background:#98C379; border-color:#98C379; color:#1e1e1e" type="button">
+                  ✓ Approve & Continue
+                </button>
+                <button class="btn btn-outline btn-mc-cancel" style="height:28px; padding:0 10px; font-size:11.5px; color:#E07A6A; border-color:rgba(224,122,106,0.4)" type="button">
+                  ⏹ Cancel
+                </button>
+              `;
+            }
+            headerActions.innerHTML = actionButtonsHtml;
+          }
 
           const countries = runData.countries || [];
           const agents = runData.agents || [];
           const criteria = runData.criteria || {};
           const brief = criteria.parsed_brief || null;
+          const plan = runData.dh_execution_plan || null;
+          const chainState = runData.chain_state || null;
 
           // Group agents by layer
           const layers = {
@@ -1038,61 +1101,184 @@
           mdContent.innerHTML = `
             <!-- High-Level Run Summary -->
             <div style="background:var(--ink-800); border:1px solid var(--line-2); border-radius:10px; padding:14px; margin-bottom:16px">
-              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px">
-                <div class="kv-row" style="padding:4px 0">
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:10px">
+                <div class="kv-row" style="padding:2px 0">
                   <span class="kv-k">Run Name</span>
-                  <span class="kv-v text-cu">${runData.run_name}</span>
+                  <span class="kv-v text-cu" style="font-weight:600">${runData.run_name}</span>
                 </div>
-                <div class="kv-row" style="padding:4px 0">
+                <div class="kv-row" style="padding:2px 0">
                   <span class="kv-k">Status</span>
                   <span class="kv-v"><span class="run-status-pill status-${runData.status}">${runData.status}</span></span>
                 </div>
-                <div class="kv-row" style="padding:4px 0">
+                <div class="kv-row" style="padding:2px 0">
                   <span class="kv-k">Input Mode</span>
                   <span class="kv-v">${runData.input_mode}</span>
                 </div>
-                <div class="kv-row" style="padding:4px 0">
-                  <span class="kv-k">Quantity</span>
+                <div class="kv-row" style="padding:2px 0">
+                  <span class="kv-k">Target Niches</span>
                   <span class="kv-v">${runData.niche_quantity} niches</span>
                 </div>
                 ${runData.own_niche_name ? `
-                  <div class="kv-row" style="padding:4px 0">
+                  <div class="kv-row" style="padding:2px 0">
                     <span class="kv-k">Candidate Niche</span>
                     <span class="kv-v text-cu">${runData.own_niche_name}</span>
                   </div>
                 ` : ''}
                 ${runData.domain ? `
-                  <div class="kv-row" style="padding:4px 0">
+                  <div class="kv-row" style="padding:2px 0">
                     <span class="kv-k">Domain</span>
                     <span class="kv-v">${runData.domain}</span>
                   </div>
                 ` : ''}
-                <div class="kv-row" style="padding:4px 0">
+                <div class="kv-row" style="padding:2px 0">
                   <span class="kv-k">Auto-approve</span>
                   <span class="kv-v">${runData.auto_approve ? 'Enabled (1-click)' : 'Disabled (Approval Gate)'}</span>
                 </div>
+                <div class="kv-row" style="padding:2px 0">
+                  <span class="kv-k">Execution Phase</span>
+                  <span class="kv-v" style="font-weight:600; color:var(--cu)">${chainState?.phase ? chainState.phase.toUpperCase() : (plan ? 'PLAN BUILT' : 'IDLE')}</span>
+                </div>
               </div>
             </div>
+
+            <!-- Approval Gate Banner (when awaiting_approval) -->
+            ${runData.status === 'awaiting_approval' ? `
+              <div style="background:rgba(229,192,123,0.12); border:1px solid rgba(229,192,123,0.45); border-radius:10px; padding:16px; margin-bottom:16px">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px">
+                  <div>
+                    <div style="display:flex; align-items:center; gap:8px">
+                      <span style="font-size:18px">🛡️</span>
+                      <span style="font-weight:700; color:#E5C07B; font-size:14px">Phase 1 Complete: Candidate Niches Awaiting Approval</span>
+                    </div>
+                    <div style="font-size:12.5px; color:var(--text-1); margin-top:6px; line-height:1.5">
+                      The Discovery Layer (Agents #6–10) has finished analyzing and identified viable candidate niches. Review and approve to launch Deep Research & Intelligence analysis.
+                    </div>
+                  </div>
+                  <div style="display:flex; gap:8px; flex-shrink:0">
+                    <button class="btn btn-primary btn-mc-approve" style="background:#98C379; border-color:#98C379; color:#1e1e1e; font-weight:700; height:32px; padding:0 14px" type="button">
+                      ✓ Approve All & Continue
+                    </button>
+                    <button class="btn btn-outline btn-mc-cancel" style="color:#E07A6A; border-color:rgba(224,122,106,0.4); height:32px; padding:0 12px" type="button">
+                      Cancel Run
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ` : ''}
 
             <!-- Error Banner if failed -->
             ${(runData.status === 'failed' || runData.error_summary) ? `
               <div style="background:rgba(224,122,106,0.1); border:1px solid rgba(224,122,106,0.35); border-radius:8px; padding:12px 14px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:12px">
                 <div>
-                  <div style="font-weight:600; color:#E07A6A; font-size:12.5px">Criteria Parser Error</div>
-                  <div style="font-size:12px; color:var(--text-2); margin-top:2px">${runData.error_summary || 'Validation failed'}</div>
+                  <div style="font-weight:600; color:#E07A6A; font-size:12.5px">Execution / Parser Alert</div>
+                  <div style="font-size:12px; color:var(--text-2); margin-top:2px">${runData.error_summary || 'Chain halted due to error'}</div>
                 </div>
-                <button class="btn btn-outline btn-reparse-action" style="border-color:rgba(224,122,106,0.5); height:28px; font-size:11.5px" type="button">
-                  Re-run Parser
-                </button>
+                <div style="display:flex; gap:6px">
+                  <button class="btn btn-outline btn-reparse-action" style="border-color:rgba(224,122,106,0.5); height:28px; font-size:11.5px" type="button">
+                    Re-run Parser
+                  </button>
+                  <button class="btn btn-primary btn-mc-start" style="height:28px; font-size:11.5px" type="button">
+                    Retry Run
+                  </button>
+                </div>
               </div>
             ` : ''}
 
-            <!-- PART 3: MISSION BRIEF SECTION (Agent #2 Output) -->
+            <!-- DEPARTMENT HEAD (AGENT #1) EXECUTION PLAN -->
             <div style="background:var(--ink-800); border:1px solid var(--line-cu, rgba(200,140,80,0.3)); border-radius:10px; padding:14px; margin-bottom:16px">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
                 <div style="display:flex; align-items:center; gap:8px">
+                  <span style="font-size:15px">👑</span>
+                  <span style="font-size:13.5px; font-weight:600; color:var(--cu)">Agent #1 Department Head — Execution Plan</span>
+                  <span class="badge badge-parsed" style="font-size:10px">${plan ? `${plan.plan_summary?.total_agents || 35} Agents Scheduled` : 'Pending'}</span>
+                </div>
+                <div style="display:flex; gap:6px">
+                  ${plan ? `
+                    <button class="btn btn-outline btn-copy-plan" style="height:24px; padding:0 8px; font-size:11px" type="button">
+                      Copy Plan JSON
+                    </button>
+                  ` : ''}
+                  <button class="btn btn-outline btn-rebuild-plan" style="height:24px; padding:0 8px; font-size:11px" type="button">
+                    ${plan ? 'Rebuild Plan' : 'Generate Plan'}
+                  </button>
+                </div>
+              </div>
+
+              ${plan ? `
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px; margin-bottom:12px">
+                  <div style="background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:6px">
+                    <div style="font-size:10.5px; color:var(--text-3)">Execution Phases</div>
+                    <div style="font-size:12px; font-weight:600; color:var(--text-1); margin-top:2px">
+                      ${(plan.phases || []).length} Phases Planned
+                    </div>
+                  </div>
+                  <div style="background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:6px">
+                    <div style="font-size:10.5px; color:var(--text-3)">Agent #10 (Potential)</div>
+                    <div style="font-size:12px; font-weight:600; color:var(--text-1); margin-top:2px">
+                      ${plan.plan_summary?.agent_10_status || 'Auto'}
+                    </div>
+                  </div>
+                  <div style="background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:6px">
+                    <div style="font-size:10.5px; color:var(--text-3)">Estimated Wall Clock</div>
+                    <div style="font-size:12px; font-weight:600; color:var(--text-1); margin-top:2px">
+                      ~${Math.round((plan.plan_summary?.estimated_total_seconds || 900) / 60)} minutes
+                    </div>
+                  </div>
+                  <div style="background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:6px">
+                    <div style="font-size:10.5px; color:var(--text-3)">Registered Agents</div>
+                    <div style="font-size:12px; font-weight:600; color:#98C379; margin-top:2px">
+                      ${plan.plan_summary?.registered_agents_count || 2} active / ${(plan.plan_summary?.pending_agents_count || 33)} pending
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Phase-by-phase breakdown -->
+                <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px">
+                  ${(plan.phases || []).map((ph) => {
+                    const isCurrent = chainState?.phase === ph.phase_id;
+                    return `
+                      <div style="background:var(--ink-900); border:1px solid ${isCurrent ? 'var(--cu)' : 'var(--line-2)'}; border-radius:6px; padding:10px">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
+                          <div style="display:flex; align-items:center; gap:6px">
+                            <span style="font-weight:600; font-size:12px; color:${isCurrent ? 'var(--cu)' : 'var(--text-1)'}">
+                              Phase ${ph.phase_number}: ${ph.name}
+                            </span>
+                            ${isCurrent ? `<span class="badge" style="background:var(--cu); color:#000; font-size:9.5px; font-weight:700">CURRENT</span>` : ''}
+                          </div>
+                          <span style="font-size:10.5px; color:var(--text-3)">
+                            ${ph.execution_mode.toUpperCase()} • ~${ph.estimated_seconds}s
+                          </span>
+                        </div>
+                        <div style="font-size:11.5px; color:var(--text-2); margin-bottom:6px">${ph.description}</div>
+                        <div style="display:flex; flex-wrap:wrap; gap:4px">
+                          ${ph.agents.map((ag) => `
+                            <span class="badge" style="font-size:10px; background:rgba(255,255,255,0.05); color:var(--text-2); border:1px solid var(--line-2)" title="${ag.role}">
+                              #${ag.number} ${ag.name}
+                            </span>
+                          `).join('')}
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+
+                <details style="background:var(--ink-900); border:1px solid var(--line-2); border-radius:6px; padding:8px 12px; font-size:11px">
+                  <summary style="cursor:pointer; color:var(--text-2); font-weight:600; user-select:none">
+                    View Full Department Head Plan JSON
+                  </summary>
+                  <pre style="margin-top:8px; padding:8px 0; font-family:var(--font-mono, monospace); font-size:11px; line-height:1.45; color:var(--cu-light, #E2B088); max-height:220px; overflow-y:auto; white-space:pre-wrap"><code>${JSON.stringify(plan, null, 2)}</code></pre>
+                </details>
+              ` : `
+                <div style="font-size:12px; color:var(--text-3)">Execution plan not built yet. Click <b>Generate Plan</b> to create.</div>
+              `}
+            </div>
+
+            <!-- MISSION BRIEF SECTION (Agent #2 Output) -->
+            <div style="background:var(--ink-800); border:1px solid var(--line-2); border-radius:10px; padding:14px; margin-bottom:16px">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px">
+                <div style="display:flex; align-items:center; gap:8px">
                   <span style="font-size:15px">📋</span>
-                  <span style="font-size:13px; font-weight:600; color:var(--cu)">Agent #2 Mission Brief</span>
+                  <span style="font-size:13px; font-weight:600; color:var(--text-1)">Agent #2 Mission Brief</span>
                   <span class="badge badge-parsed" style="font-size:10px">v${criteria.parser_version || '1.0'}</span>
                 </div>
                 <div style="display:flex; gap:6px">
@@ -1174,11 +1360,11 @@
                     </div>
                     <div class="asm-agent-list">
                       ${layerData.items.map((ag) => `
-                        <div class="asm-agent-item">
+                        <div class="asm-agent-item" id="asm-ag-${ag.agent_number}">
                           <div class="asm-agent-name" title="#${ag.agent_number} ${ag.agent_name}">
                             <b style="color:var(--text-3); margin-right:4px">#${ag.agent_number}</b>${ag.agent_name}
                           </div>
-                          <span class="asm-agent-pill ${ag.status === 'done' ? 'pill-done' : ag.status === 'running' ? 'pill-running' : ''}">${ag.status}</span>
+                          <span class="asm-agent-pill ${ag.status === 'done' ? 'pill-done' : ag.status === 'running' ? 'pill-running' : ag.status === 'skipped' ? 'pill-skipped' : ag.status === 'failed' ? 'pill-failed' : ''}">${ag.status}</span>
                         </div>
                       `).join('')}
                     </div>
@@ -1201,6 +1387,118 @@
               }
             });
           }
+
+          const copyPlanBtn = mdContent.querySelector('.btn-copy-plan');
+          if (copyPlanBtn && plan) {
+            copyPlanBtn.addEventListener('click', async () => {
+              try {
+                await navigator.clipboard.writeText(JSON.stringify(plan, null, 2));
+                copyPlanBtn.textContent = 'Copied ✓';
+                setTimeout(() => { copyPlanBtn.textContent = 'Copy Plan JSON'; }, 2000);
+              } catch {
+                copyPlanBtn.textContent = 'Copied ✓';
+              }
+            });
+          }
+
+          const rebuildPlanBtn = mdContent.querySelector('.btn-rebuild-plan');
+          if (rebuildPlanBtn) {
+            rebuildPlanBtn.addEventListener('click', async () => {
+              rebuildPlanBtn.disabled = true;
+              rebuildPlanBtn.textContent = 'Building…';
+              try {
+                if (window.dbAPI && typeof window.dbAPI.buildPlan === 'function') {
+                  await window.dbAPI.buildPlan(runId);
+                } else {
+                  await fetch(`/api/db/runs/${runId}/plan`, { method: 'POST' });
+                }
+                if (window.NRDToast) {
+                  window.NRDToast.show({
+                    type: 'success',
+                    title: 'Execution Plan Ready',
+                    msg: 'Agent #1 Department Head generated updated execution plan.',
+                  });
+                }
+                await renderDetails();
+              } catch (err) {
+                console.error('[NewResearch] Build plan error:', err);
+                if (window.NRDToast) {
+                  window.NRDToast.show({
+                    type: 'error',
+                    title: 'Plan Build Failed',
+                    msg: err.message,
+                  });
+                }
+                rebuildPlanBtn.disabled = false;
+                rebuildPlanBtn.textContent = 'Generate Plan';
+              }
+            });
+          }
+
+          // Chain Engine Actions: Start / Pause / Resume / Cancel / Approve
+          const bindAction = (selector, actionFn) => {
+            const btn = modalEl.querySelector(selector);
+            if (btn) {
+              btn.addEventListener('click', async () => {
+                btn.disabled = true;
+                try {
+                  await actionFn();
+                  await renderDetails();
+                  if (typeof loadRunsLedger === 'function') loadRunsLedger();
+                } catch (err) {
+                  console.error('[NewResearch] Chain action error:', err);
+                  if (window.NRDToast) {
+                    window.NRDToast.show({ type: 'error', title: 'Action Error', msg: err.message });
+                  }
+                  btn.disabled = false;
+                }
+              });
+            }
+          };
+
+          bindAction('.btn-mc-start', async () => {
+            if (window.engineAPI && typeof window.engineAPI.startRun === 'function') {
+              await window.engineAPI.startRun(runId);
+            } else {
+              await fetch(`/api/engine/runs/${runId}/start`, { method: 'POST' });
+            }
+            if (window.NRDToast) {
+              window.NRDToast.show({ type: 'success', title: 'Chain Started', msg: `Run #${runId} execution is in progress.` });
+            }
+          });
+
+          bindAction('.btn-mc-pause', async () => {
+            if (window.engineAPI && typeof window.engineAPI.pauseRun === 'function') {
+              await window.engineAPI.pauseRun(runId);
+            } else {
+              await fetch(`/api/engine/runs/${runId}/pause`, { method: 'POST' });
+            }
+            if (window.NRDToast) {
+              window.NRDToast.show({ type: 'info', title: 'Chain Paused', msg: `Run #${runId} will pause after current agent.` });
+            }
+          });
+
+          bindAction('.btn-mc-cancel', async () => {
+            if (window.engineAPI && typeof window.engineAPI.cancelRun === 'function') {
+              await window.engineAPI.cancelRun(runId);
+            } else {
+              await fetch(`/api/engine/runs/${runId}/cancel`, { method: 'POST' });
+            }
+            if (window.NRDToast) {
+              window.NRDToast.show({ type: 'warning', title: 'Chain Cancelled', msg: `Run #${runId} execution cancelled.` });
+            }
+          });
+
+          bindAction('.btn-mc-approve', async () => {
+            if (window.engineAPI && typeof window.engineAPI.approveRun === 'function') {
+              await window.engineAPI.approveRun(runId);
+            } else {
+              await fetch(`/api/engine/runs/${runId}/approve`, { method: 'POST' });
+            }
+            if (window.NRDToast) {
+              window.NRDToast.show({ type: 'success', title: 'Run Approved', msg: `Run #${runId} approved. Proceeding with Deep Research.` });
+            }
+          });
 
           const reparseBtns = mdContent.querySelectorAll('.btn-reparse-action');
           reparseBtns.forEach((btn) => {
@@ -1262,6 +1560,32 @@
           }
         }
       };
+
+      // Subscribe to real-time execution events while modal is open
+      if (window.engineAPI) {
+        if (typeof window.engineAPI.onRunStatus === 'function') {
+          unsubscribeRunStatus = window.engineAPI.onRunStatus((evt) => {
+            if (evt && evt.runId === runId) {
+              renderDetails();
+              if (typeof loadRunsLedger === 'function') loadRunsLedger();
+            }
+          });
+        }
+        if (typeof window.engineAPI.onAgentStatus === 'function') {
+          unsubscribeAgentStatus = window.engineAPI.onAgentStatus((evt) => {
+            if (evt && evt.runId === runId) {
+              const agItem = modalEl.querySelector(`#asm-ag-${evt.agentNumber}`);
+              if (agItem) {
+                const pill = agItem.querySelector('.asm-agent-pill');
+                if (pill) {
+                  pill.textContent = evt.status;
+                  pill.className = `asm-agent-pill ${evt.status === 'done' ? 'pill-done' : evt.status === 'running' ? 'pill-running' : evt.status === 'skipped' ? 'pill-skipped' : evt.status === 'failed' ? 'pill-failed' : ''}`;
+                }
+              }
+            }
+          });
+        }
+      }
 
       renderDetails();
     },

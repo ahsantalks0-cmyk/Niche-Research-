@@ -98,6 +98,71 @@ app.post('/api/db/runs/:id/parse', (req, res) => {
   }
 });
 
+// Department Head & Chain Engine routes (P1.2)
+app.post('/api/db/runs/:id/plan', (req, res) => {
+  try {
+    const runId = Number(req.params.id);
+    const { buildPlan } = require('./src/main/agents/departmentHead');
+    const result = buildPlan(runId);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/engine/runs/:id/start', async (req, res) => {
+  try {
+    const runId = Number(req.params.id);
+    const { chainEngine } = require('./src/main/engine/chainEngine');
+    const result = await chainEngine.startRun(runId, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/engine/runs/:id/approve', async (req, res) => {
+  try {
+    const runId = Number(req.params.id);
+    const { chainEngine } = require('./src/main/engine/chainEngine');
+    const result = await chainEngine.approveRun(runId, req.body?.approvedNiches);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/engine/runs/:id/pause', async (req, res) => {
+  try {
+    const runId = Number(req.params.id);
+    const { chainEngine } = require('./src/main/engine/chainEngine');
+    const result = await chainEngine.pauseRun(runId);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/engine/runs/:id/cancel', async (req, res) => {
+  try {
+    const runId = Number(req.params.id);
+    const { chainEngine } = require('./src/main/engine/chainEngine');
+    const result = await chainEngine.cancelRun(runId);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/engine/agents', (req, res) => {
+  try {
+    const agentRegistry = require('./src/main/engine/agentRegistry');
+    res.json(agentRegistry.listAll());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/db/agent-status', (req, res) => {
   try {
     const { runId, agentNumber, statusUpdate } = req.body;

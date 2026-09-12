@@ -43,6 +43,37 @@ function registerDbIpc() {
     return db.parseRun(runId);
   });
 
+  // Department Head & Chain Engine (P1.2)
+  ipcMain.handle('db:buildPlan', (_e, runId) => {
+    const { buildPlan } = require('./agents/departmentHead');
+    return buildPlan(runId);
+  });
+
+  ipcMain.handle('engine:startRun', (_e, runId, options) => {
+    const { chainEngine } = require('./engine/chainEngine');
+    return chainEngine.startRun(runId, options);
+  });
+
+  ipcMain.handle('engine:approveRun', (_e, runId, approvedNiches) => {
+    const { chainEngine } = require('./engine/chainEngine');
+    return chainEngine.approveRun(runId, approvedNiches);
+  });
+
+  ipcMain.handle('engine:pauseRun', (_e, runId) => {
+    const { chainEngine } = require('./engine/chainEngine');
+    return chainEngine.pauseRun(runId);
+  });
+
+  ipcMain.handle('engine:cancelRun', (_e, runId) => {
+    const { chainEngine } = require('./engine/chainEngine');
+    return chainEngine.cancelRun(runId);
+  });
+
+  ipcMain.handle('engine:listAgents', () => {
+    const agentRegistry = require('./engine/agentRegistry');
+    return agentRegistry.listAll();
+  });
+
   ipcMain.handle('db:updateAgentStatus', (_e, runId, agentNumber, statusUpdate) => {
     return db.updateAgentStatus(runId, agentNumber, statusUpdate);
   });
@@ -170,11 +201,15 @@ function registerEngineIpc(mainWindow) {
     }
   };
 
+  const { chainEngine } = require('./engine/chainEngine');
+
   browserEngine.on('log', (entry) => sendToRenderer('engine:log', entry));
   browserEngine.on('captcha:detected', (data) => sendToRenderer('captcha:detected', data));
   browserEngine.on('captcha:resolved', (data) => sendToRenderer('captcha:resolved', data));
   slotPool.on('slots:updated', (data) => sendToRenderer('slots:updated', data));
   rateLimiter.on('wait', (data) => sendToRenderer('rate-limiter:wait', data));
+  chainEngine.on('run:status', (data) => sendToRenderer('engine:run-status', data));
+  chainEngine.on('agent:status', (data) => sendToRenderer('engine:agent-status', data));
 }
 
 module.exports = {

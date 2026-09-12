@@ -220,6 +220,9 @@ const testHarness = {
   },
 };
 
+const { chainEngine } = require('./chainEngine');
+const agentRegistry = require('./agentRegistry');
+
 module.exports = {
   browserEngine,
   engineCache,
@@ -231,4 +234,7 @@ module.exports = {
   human,
   runTask,
   testHarness,
+  chainEngine,
+  agentRegistry,
 };
+

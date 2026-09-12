@@ -11,6 +11,8 @@ const VALID_EVENTS = new Set([
   'captcha:resolved',
   'slots:updated',
   'rate-limiter:wait',
+  'engine:run-status',
+  'engine:agent-status',
 ]);
 
 /**
@@ -64,6 +66,7 @@ contextBridge.exposeInMainWorld('dbAPI', {
   createRun: (runData, countryCodes, criteriaBrief) =>
     ipcRenderer.invoke('db:createRun', runData, countryCodes, criteriaBrief),
   parseRun: (runId) => ipcRenderer.invoke('db:parseRun', runId),
+  buildPlan: (runId) => ipcRenderer.invoke('db:buildPlan', runId),
   getRun: (runId) => ipcRenderer.invoke('db:getRun', runId),
   getRuns: (options) => ipcRenderer.invoke('db:getRuns', options),
   updateAgentStatus: (runId, agentNumber, statusUpdate) =>
@@ -106,11 +109,20 @@ contextBridge.exposeInMainWorld('engineAPI', {
   /* Test Harness (Part 7) */
   runTest: (testName, args) => ipcRenderer.invoke('engine:run-test', testName, args),
 
-  /* Real-time event streams (Part 4, 6) */
+  /* Execution Chain (P1.2) */
+  startRun: (runId, options) => ipcRenderer.invoke('engine:startRun', runId, options),
+  approveRun: (runId, approvedNiches) => ipcRenderer.invoke('engine:approveRun', runId, approvedNiches),
+  pauseRun: (runId) => ipcRenderer.invoke('engine:pauseRun', runId),
+  cancelRun: (runId) => ipcRenderer.invoke('engine:cancelRun', runId),
+  listAgents: () => ipcRenderer.invoke('engine:listAgents'),
+
+  /* Real-time event streams (Part 4, 6, P1.2) */
   onLog: (cb) => on('engine:log', cb),
   onCaptchaDetected: (cb) => on('captcha:detected', cb),
   onCaptchaResolved: (cb) => on('captcha:resolved', cb),
   onSlotsUpdated: (cb) => on('slots:updated', cb),
   onRateLimiterWait: (cb) => on('rate-limiter:wait', cb),
+  onRunStatus: (cb) => on('engine:run-status', cb),
+  onAgentStatus: (cb) => on('engine:agent-status', cb),
 });
 

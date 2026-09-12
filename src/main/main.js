@@ -167,6 +167,17 @@ app.whenReady().then(() => {
   nativeTheme.themeSource = savedTheme === 'light' ? 'light' : 'dark';
   createWindow();
   registerEngineIpc(mainWindow);
+
+  // Initialize Department Head & recover runs
+  try {
+    const { chainEngine } = require('./engine/chainEngine');
+    chainEngine.recoverRunsOnStartup().catch((err) => {
+      console.warn('[main] Startup run recovery error:', err.message);
+    });
+  } catch (err) {
+    console.warn('[main] Could not initialize chain engine recovery:', err.message);
+  }
+
   // Silent update check ~2.5s after launch, so it never blocks first paint.
   setTimeout(() => updater.checkOnStart(), 2500);
 

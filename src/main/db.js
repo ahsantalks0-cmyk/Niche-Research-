@@ -13,11 +13,13 @@ const Database = require('better-sqlite3');
 const migrationV1 = require('./migrations/v1');
 const migrationV2 = require('./migrations/v2');
 const migrationV3 = require('./migrations/v3');
+const migrationV4 = require('./migrations/v4');
 
 const MIGRATIONS = [
   migrationV1,
   migrationV2,
   migrationV3,
+  migrationV4,
 ];
 
 let _db = null;
@@ -432,14 +434,14 @@ function createRun(runData, countryCodes = [], criteriaBrief = {}) {
   const db = getDb();
 
   const AGENT_LAYERS = [
-    { num: 1, name: 'Coordinator', layer: 'control' },
+    { num: 1, name: 'Department Head Agent', layer: 'control' },
     { num: 2, name: 'Criteria Parser Agent', layer: 'control' },
-    { num: 3, name: 'Jarvis Gateway', layer: 'control' },
+    { num: 3, name: 'Quality Supervisor', layer: 'qa_reporting' },
     { num: 4, name: 'Scheduler Agent', layer: 'control' },
-    { num: 5, name: 'Senior Consultant Chat', layer: 'control' },
-    { num: 6, name: 'Trend Scanner', layer: 'discovery' },
-    { num: 7, name: 'SERP Cartographer', layer: 'discovery' },
-    { num: 8, name: 'Forum Miner', layer: 'discovery' },
+    { num: 5, name: 'Jarvis Gateway', layer: 'control' },
+    { num: 6, name: 'Niche Discovery', layer: 'discovery' },
+    { num: 7, name: 'Trend & Demand Signal', layer: 'discovery' },
+    { num: 8, name: 'Quick Competition Screener', layer: 'discovery' },
     { num: 9, name: 'Duplicate & History Check', layer: 'discovery' },
     { num: 10, name: 'Country Potential Intelligence', layer: 'discovery' },
     { num: 11, name: 'Keyword Research', layer: 'deep_research' },
@@ -462,7 +464,7 @@ function createRun(runData, countryCodes = [], criteriaBrief = {}) {
     { num: 28, name: 'Opportunity Scoring', layer: 'intelligence' },
     { num: 29, name: 'Final Verdict', layer: 'intelligence' },
     { num: 30, name: 'Risk & Compliance', layer: 'intelligence' },
-    { num: 31, name: 'Quality Supervisor', layer: 'qa_reporting' },
+    { num: 31, name: 'Quality Supervisor (Audit)', layer: 'qa_reporting' },
     { num: 32, name: 'QA & Validation', layer: 'qa_reporting' },
     { num: 33, name: 'Report Specialist', layer: 'qa_reporting' },
     { num: 34, name: 'SEO Department Handoff', layer: 'qa_reporting' },
@@ -561,6 +563,7 @@ function getRun(runId) {
     ...run,
     business_modes: run.business_modes ? JSON.parse(run.business_modes) : [],
     dh_execution_plan: run.dh_execution_plan ? JSON.parse(run.dh_execution_plan) : null,
+    chain_state: run.chain_state ? JSON.parse(run.chain_state) : null,
     countries,
     criteria: criteria ? { ...criteria, parsed_brief: parsedBrief, raw_input: rawInput } : null,
     agents,
