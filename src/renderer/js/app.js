@@ -13,36 +13,64 @@
 
   /* --------------------------------- router --------------------------------- */
 
-  function setPage(id) {
+  let currentParams = {};
+
+  function parseHash() {
+    const raw = (location.hash || '').replace(/^#\/?/, '');
+    if (!raw) return { page: 'dashboard', params: {} };
+
+    let page = raw;
+    let params = {};
+
+    if (raw.includes('?')) {
+      const [pKey, query] = raw.split('?');
+      page = pKey;
+      const searchParams = new URLSearchParams(query);
+      for (const [k, v] of searchParams.entries()) {
+        params[k] = v;
+      }
+    } else if (raw.includes('/')) {
+      const parts = raw.split('/');
+      page = parts[0];
+      if (parts[1]) params.id = parts[1];
+    }
+
+    return { page, params };
+  }
+
+  function setPage(id, params = {}) {
     if (!window.NRDPages || !window.NRDPages[id]) return false;
-    if (currentPage === id) return true;
+    const paramsChanged = JSON.stringify(currentParams) !== JSON.stringify(params);
+    if (currentPage === id && !paramsChanged) return true;
 
     if (currentPage && typeof window.NRDPages[currentPage].destroy === 'function') {
       window.NRDPages[currentPage].destroy();
     }
 
     currentPage = id;
+    currentParams = params;
     $pages().innerHTML = '';
-    $pages().appendChild(window.NRDPages[id].render());
+    $pages().appendChild(window.NRDPages[id].render(params));
 
     document.querySelectorAll('.nav-item').forEach((n) => {
       n.classList.toggle('active', n.dataset.page === id);
     });
 
     const titleEl = document.getElementById('page-title');
-    if (titleEl) titleEl.textContent = window.NRDPages[id].title || id;
-
-    const want = `#/${id}`;
-    if (location.hash !== want) location.hash = want;
+    if (titleEl) {
+      let pageTitle = window.NRDPages[id].title || id;
+      if (id === 'run-detail' && params.id) pageTitle = `Run #${params.id} · Mission Control`;
+      titleEl.textContent = pageTitle;
+    }
 
     document.getElementById('main').scrollTop = 0;
-    if (typeof window.NRDPages[id].mounted === 'function') window.NRDPages[id].mounted();
+    if (typeof window.NRDPages[id].mounted === 'function') window.NRDPages[id].mounted(params);
     return true;
   }
 
   function fromHash() {
-    const id = (location.hash || '').replace(/^#\/?/, '') || 'dashboard';
-    if (!setPage(id)) setPage('dashboard');
+    const { page, params } = parseHash();
+    if (!setPage(page, params)) setPage('dashboard', {});
     return true;
   }
 

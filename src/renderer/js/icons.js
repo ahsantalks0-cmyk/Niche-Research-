@@ -33,6 +33,16 @@
     sort: S('<path d="M7 3v18M7 21l-3-3M7 21l3-3M17 21V3M17 3l-3 3M17 3l3 3"/>'),
     shield: S('<path d="M12 22s8-3.5 8-10V5.5L12 2 4 5.5V12c0 6.5 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>'),
     key: S('<circle cx="8" cy="15" r="4.5"/><path d="M11.2 11.8L20 3M17 6l2.5 2.5M14.5 8.5L17 11"/>'),
+    terminal: S('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>'),
+    layers: S('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/>'),
+    pause: S('<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'),
+    stop: S('<rect x="4" y="4" width="16" height="16" rx="2"/>'),
+    clock: S('<circle cx="12" cy="12" r="9"/><polyline points="12 6 12 12 16 14"/>'),
+    zap: S('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),
+    code: S('<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>'),
+    arrowLeft: S('<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>'),
+    chevronDown: S('<polyline points="6 9 12 15 18 9"/>'),
+    chevronRight: S('<polyline points="9 18 15 12 9 6"/>'),
   };
 
   const cached = {};

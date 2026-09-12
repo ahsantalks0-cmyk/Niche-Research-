@@ -183,6 +183,27 @@ app.get('/api/db/niches', (req, res) => {
   }
 });
 
+app.get('/api/engine/timing-summary', (req, res) => {
+  try {
+    const runId = req.query.runId ? Number(req.query.runId) : null;
+    res.json(db.getTimingSummary(runId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/engine/timing-logs', (req, res) => {
+  try {
+    const options = {
+      limit: req.query.limit ? Number(req.query.limit) : 50,
+      runId: req.query.runId ? Number(req.query.runId) : undefined,
+    };
+    res.json(db.getTimingLogs(options));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/db/crud/:action', (req, res) => {
   try {
     const { action } = req.params;

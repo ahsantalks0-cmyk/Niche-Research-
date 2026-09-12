@@ -101,6 +101,10 @@
         });
         return await res.json();
       },
+      buildPlan: async (runId) => {
+        const res = await fetch(`/api/db/runs/${runId}/plan`, { method: 'POST' });
+        return await res.json();
+      },
       getRun: async (runId) => {
         const res = await fetch(`/api/db/runs/${runId}`);
         return await res.json();
@@ -203,6 +207,8 @@
       captchaResolved: [],
       slotsUpdated: [],
       rateLimiterWait: [],
+      runStatus: [],
+      agentStatus: [],
     };
 
     window.engineAPI = {
@@ -223,17 +229,51 @@
         waitsTotal: 1,
         totalWaitMs: 350,
       }),
-      getTimingSummary: async () => ({
-        totalOperations: 12,
-        totalDurationMs: 4500,
-        avgDurationMs: 375,
-        cacheHits: 4,
-        cacheMisses: 8,
-        estimatedTimeSavedSec: 16,
-        breakdownByDomain: { 'google.com': 12 },
-      }),
-      getTimingLogs: async () => [],
+      getTimingSummary: async (runId) => {
+        try {
+          const res = await fetch(`/api/engine/timing-summary?runId=${runId || ''}`);
+          return await res.json();
+        } catch {
+          return { totalOperations: 0, totalDurationMs: 0, cacheHits: 0, rateLimitWaitsCount: 0, captchaCount: 0, breakdown: [] };
+        }
+      },
+      getTimingLogs: async (options = {}) => {
+        try {
+          const res = await fetch(`/api/engine/timing-logs?limit=${options.limit || 50}&runId=${options.runId || ''}`);
+          return await res.json();
+        } catch {
+          return [];
+        }
+      },
       searchGoogle: async () => ({ results: [], cached: true }),
+      startRun: async (runId, options) => {
+        const res = await fetch(`/api/engine/runs/${runId}/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(options || {}),
+        });
+        return await res.json();
+      },
+      approveRun: async (runId, approvedNiches) => {
+        const res = await fetch(`/api/engine/runs/${runId}/approve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ approvedNiches }),
+        });
+        return await res.json();
+      },
+      pauseRun: async (runId) => {
+        const res = await fetch(`/api/engine/runs/${runId}/pause`, { method: 'POST' });
+        return await res.json();
+      },
+      cancelRun: async (runId) => {
+        const res = await fetch(`/api/engine/runs/${runId}/cancel`, { method: 'POST' });
+        return await res.json();
+      },
+      listAgents: async () => {
+        const res = await fetch('/api/engine/agents');
+        return await res.json();
+      },
       runTest: async (testName) => {
         await new Promise((r) => setTimeout(r, 600));
         return {
@@ -250,6 +290,8 @@
       onCaptchaResolved: (cb) => { engineListeners.captchaResolved.push(cb); return () => {}; },
       onSlotsUpdated: (cb) => { engineListeners.slotsUpdated.push(cb); return () => {}; },
       onRateLimiterWait: (cb) => { engineListeners.rateLimiterWait.push(cb); return () => {}; },
+      onRunStatus: (cb) => { engineListeners.runStatus.push(cb); return () => {}; },
+      onAgentStatus: (cb) => { engineListeners.agentStatus.push(cb); return () => {}; },
     };
   }
 })();
