@@ -397,7 +397,7 @@ function getCountries(activeOnly = false) {
  * @param {Record<string, any>} [criteriaBrief={}]
  * @returns {Record<string, any>} The created run row
  */
-function createRun(runData, countryCodes = ['US'], criteriaBrief = {}) {
+function createRun(runData, countryCodes = [], criteriaBrief = {}) {
   const db = getDb();
 
   const AGENT_LAYERS = [
@@ -515,6 +515,36 @@ function getRun(runId) {
     criteria: criteria ? { ...criteria, parsed_brief: JSON.parse(criteria.parsed_brief), raw_input: JSON.parse(criteria.raw_input) } : null,
     agents,
   };
+}
+
+/**
+ * Retrieves a list of research runs with country counts, status, and parsed business modes.
+ * @param {{ limit?: number, offset?: number }} [options={}]
+ * @returns {Array<Record<string, any>>}
+ */
+function getRuns(options = {}) {
+  const db = getDb();
+  const limit = options.limit || 50;
+  const offset = options.offset || 0;
+  const runs = db.prepare('SELECT * FROM research_runs ORDER BY id DESC LIMIT ? OFFSET ?').all(limit, offset);
+
+  return runs.map((run) => {
+    let businessModes = [];
+    try {
+      businessModes = JSON.parse(run.business_modes || '[]');
+    } catch {
+      businessModes = [];
+    }
+    const countries = db.prepare(
+      'SELECT country_code, country_name, selection_type, potential_score FROM run_countries WHERE run_id = ? ORDER BY id ASC'
+    ).all(run.id);
+
+    return {
+      ...run,
+      business_modes: businessModes,
+      countries,
+    };
+  });
 }
 
 /**
@@ -644,6 +674,7 @@ module.exports = {
   getCountries,
   createRun,
   getRun,
+  getRuns,
   updateAgentStatus,
   getNichesByRun,
   getCounts,

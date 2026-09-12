@@ -13,7 +13,7 @@
     "start": "node server.js",
     "dev": "node server.js",
     "build": "echo 'No build needed'",
-    "test": "node scripts/test-db.js",
+    "test": "node scripts/test-db.js && node scripts/test-p04.js",
     "lint": "node scripts/lint.mjs",
     "rebuild": "electron-builder install-app-deps",
     "pack": "electron-builder --dir",

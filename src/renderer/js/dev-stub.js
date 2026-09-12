@@ -105,6 +105,12 @@
         const res = await fetch(`/api/db/runs/${runId}`);
         return await res.json();
       },
+      getRuns: async (options = {}) => {
+        const limit = options.limit || 50;
+        const offset = options.offset || 0;
+        const res = await fetch(`/api/db/runs?limit=${limit}&offset=${offset}`);
+        return await res.json();
+      },
       updateAgentStatus: async (runId, agentNumber, statusUpdate) => {
         const res = await fetch('/api/db/agent-status', {
           method: 'POST',

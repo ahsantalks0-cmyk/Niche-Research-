@@ -58,6 +58,16 @@ app.get('/api/db/health', (req, res) => {
   }
 });
 
+app.get('/api/db/runs', (req, res) => {
+  try {
+    const limit = req.query.limit ? Number(req.query.limit) : 50;
+    const offset = req.query.offset ? Number(req.query.offset) : 0;
+    res.json(db.getRuns({ limit, offset }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/db/runs', (req, res) => {
   try {
     const { runData, countryCodes, criteriaBrief } = req.body;

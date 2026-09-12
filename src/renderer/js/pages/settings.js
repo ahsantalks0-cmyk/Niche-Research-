@@ -197,6 +197,10 @@
       const auto = document.getElementById('set-autoapprove');
       auto.checked = !!settings.autoApprove;
       auto.addEventListener('change', () => {
+        window.NRDSettings = window.NRDSettings || {};
+        window.NRDSettings.autoApprove = auto.checked;
+        window.dispatchEvent(new CustomEvent('nrd:settings-changed', { detail: { autoApprove: auto.checked } }));
+
         if (window.dbAPI) {
           window.dbAPI.saveSettings({ autoApprove: auto.checked }).catch(() => {});
         } else if (window.nrd) {
@@ -292,7 +296,11 @@
             NRDTheme.set(dbSet.theme);
             syncThemeCards();
           }
-          if (auto) auto.checked = !!dbSet.autoApprove;
+          if (auto) {
+            auto.checked = !!dbSet.autoApprove;
+            window.NRDSettings = window.NRDSettings || {};
+            window.NRDSettings.autoApprove = auto.checked;
+          }
           if (lang) lang.value = dbSet.language || 'en';
           if (keyGemini && dbSet.geminiApiKey) keyGemini.value = dbSet.geminiApiKey;
           if (keyJarvis && dbSet.jarvisApiKey) keyJarvis.value = dbSet.jarvisApiKey;
