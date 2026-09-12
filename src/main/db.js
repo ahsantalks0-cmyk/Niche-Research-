@@ -697,20 +697,17 @@ function getDbHealth() {
   }
 
   const settings = getSettings();
-  const tables = [
-    'research_runs', 'run_countries', 'run_criteria', 'agent_status', 'countries',
-    'niches', 'niche_history', 'keywords', 'serp_results', 'competitors',
-    'content_gaps', 'unmet_intents', 'social_competition', 'paid_ads',
-    'digital_product_market', 'ecomm_market', 'digital_product_list',
-    'ecomm_product_list', 'affiliate_programs', 'rpm_data', 'personas',
-    'geo_localization', 'domain_brand', 'country_benchmarks', 'opportunity_scores',
-    'final_verdicts', 'risk_flags', 'qa_checks', 'reports', 'seo_handoff_packages',
-    're_research_log', 'scheduler_jobs', 'chat_messages', 'jarvis_requests',
-    'app_settings', 'schema_migrations', 'page_cache', 'timing_logs',
-  ];
+  
+  // Query all non-internal tables from sqlite_master
+  const tableRows = db.prepare(`
+    SELECT name FROM sqlite_master 
+    WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
+    ORDER BY name ASC
+  `).all();
 
   const tableCounts = {};
-  for (const t of tables) {
+  for (const row of tableRows) {
+    const t = row.name;
     try {
       tableCounts[t] = count(t);
     } catch {

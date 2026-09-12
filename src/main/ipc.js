@@ -210,6 +210,42 @@ function registerEngineIpc(mainWindow) {
     }
   };
 
+  // System Tests Runner (P1.3c)
+  const systemTests = require('./engine/systemTests');
+  ipcMain.handle('engine:list-system-tests', () => {
+    return systemTests.listSystemTests();
+  });
+
+  ipcMain.handle('engine:run-system-test', async (_e, fileName) => {
+    return await systemTests.runSystemTest(fileName, (chunk) => {
+      sendToRenderer('engine:system-test-log', { fileName, chunk });
+    });
+  });
+
+  // Multi-Provider LLM Engine (P1.3c)
+  const llmClient = require('./llm/llmClient');
+  llmClient.initAutoRefresh();
+
+  ipcMain.handle('llm:getProviders', () => {
+    return llmClient.listProviders();
+  });
+
+  ipcMain.handle('llm:fetchModels', async (_e, providerId, apiKey) => {
+    return await llmClient.fetchModels(providerId, apiKey);
+  });
+
+  ipcMain.handle('llm:validateModel', async (_e, params) => {
+    return await llmClient.validateModel(params);
+  });
+
+  ipcMain.handle('llm:chat', async (_e, options) => {
+    return await llmClient.chat(options);
+  });
+
+  ipcMain.handle('llm:checkModelStatus', async () => {
+    return await llmClient.checkSelectedModelStatus();
+  });
+
   const { chainEngine } = require('./engine/chainEngine');
 
   browserEngine.on('log', (entry) => sendToRenderer('engine:log', entry));

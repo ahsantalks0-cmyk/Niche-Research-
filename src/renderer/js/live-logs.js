@@ -35,41 +35,41 @@ window.NRDLiveLogs = (function () {
     }
   }
 
-  function getTagClass(level) {
-    const l = (level || '').toLowerCase();
-    if (l.includes('browser')) return 'tag-browser';
-    if (l.includes('rate')) return 'tag-rate-limit';
-    if (l.includes('cache')) return 'tag-cache';
-    if (l.includes('captcha')) return 'tag-captcha';
-    if (l.includes('timing')) return 'tag-timing';
-    if (l.includes('error')) return 'tag-error';
+  function getTagClass(log) {
+    const c = (log.category || log.level || '').toLowerCase();
+    if (c.includes('agent')) return 'tag-agent';
+    if (c.includes('qs')) return 'tag-qs';
+    if (c.includes('chain')) return 'tag-chain';
+    if (c.includes('llm')) return 'tag-llm';
+    if (c.includes('browser')) return 'tag-browser';
+    if (c.includes('rate')) return 'tag-rate-limit';
+    if (c.includes('cache')) return 'tag-cache';
+    if (c.includes('captcha')) return 'tag-captcha';
+    if (c.includes('timing')) return 'tag-timing';
+    if (c.includes('error')) return 'tag-error';
     return 'tag-info';
   }
 
   function matchesFilter(log, filter) {
     if (filter === 'all') return true;
-    const l = (log.level || '').toLowerCase();
-    if (filter === 'info') return l === 'info';
-    if (filter === 'browser') return l.includes('browser');
-    if (filter === 'rate-limit') return l.includes('rate');
-    if (filter === 'cache') return l.includes('cache');
-    if (filter === 'captcha') return l.includes('captcha');
-    if (filter === 'timing') return l.includes('timing');
-    return true;
+    const cat = (log.category || log.level || '').toLowerCase();
+    const f = filter.toLowerCase();
+    if (f === 'rate-limit' || f === 'rate') return cat.includes('rate');
+    return cat.includes(f);
   }
 
   function renderRow(log) {
     const row = document.createElement('div');
     row.className = 'terminal-row';
-    row.dataset.level = (log.level || 'info').toLowerCase();
+    row.dataset.level = (log.category || log.level || 'info').toLowerCase();
 
     const time = document.createElement('span');
     time.className = 'terminal-time';
     time.textContent = formatTime(log.timestamp);
 
     const tag = document.createElement('span');
-    tag.className = `terminal-tag ${getTagClass(log.level)}`;
-    tag.textContent = (log.level || 'INFO').toUpperCase();
+    tag.className = `terminal-tag ${getTagClass(log)}`;
+    tag.textContent = (log.category || log.level || 'INFO').toUpperCase();
 
     const msg = document.createElement('span');
     msg.className = 'terminal-msg';

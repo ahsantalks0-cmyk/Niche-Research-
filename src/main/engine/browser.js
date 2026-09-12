@@ -70,16 +70,43 @@ class BrowserEngine extends EventEmitter {
   }
 
   log(level, msg, meta = {}) {
-    const timestamp = new Date().toISOString().slice(11, 19);
+    const timestamp = meta.timestamp || new Date().toISOString();
+    let category = meta.category || null;
+
+    if (!category) {
+      const l = String(level || '').toUpperCase();
+      if (['AGENT', 'BROWSER', 'CACHE', 'RATE LIMIT', 'CAPTCHA', 'TIMING', 'QS', 'CHAIN', 'LLM'].includes(l)) {
+        category = l;
+      } else if (l.includes('CACHE')) {
+        category = 'CACHE';
+      } else if (l.includes('RATE')) {
+        category = 'RATE LIMIT';
+      } else if (l.includes('CAPTCHA')) {
+        category = 'CAPTCHA';
+      } else if (l.includes('TIMING')) {
+        category = 'TIMING';
+      } else if (typeof msg === 'string') {
+        if (msg.includes('🛡️') || msg.includes('QS')) category = 'QS';
+        else if (msg.includes('🚀') || msg.includes('👑') || msg.includes('▶️') || msg.includes('⏩') || msg.includes('⚡') || msg.includes('Chain Engine') || msg.includes('Approval Gate')) category = 'CHAIN';
+        else if (msg.includes('🤖') || msg.includes('Agent #') || msg.includes('🔍 Parser') || msg.includes('Department Head')) category = 'AGENT';
+        else category = 'BROWSER';
+      } else {
+        category = 'BROWSER';
+      }
+    }
+
     const entry = {
-      level, // 'info' | 'cache' | 'rate-limit' | 'captcha' | 'error' | 'timing'
+      level: level || 'info',
+      category: category.toUpperCase(),
       message: msg,
       timestamp,
+      slotId: meta.slotId || null,
+      details: meta.details || null,
       ...meta,
     };
     this.emit('log', entry);
     // Also print to stdout
-    const prefix = `[NRD · ${level.toUpperCase()}]`;
+    const prefix = `[NRD · ${entry.category}]`;
     console.log(`${prefix} ${msg}`);
   }
 

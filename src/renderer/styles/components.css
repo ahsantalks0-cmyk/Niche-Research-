@@ -2987,6 +2987,20 @@ textarea.input { height: auto; min-height: 96px; padding: 12px 14px; resize: non
 .log-agent { color: #38bdf8; }
 .log-agent .log-badge { background: rgba(56, 189, 248, 0.2); color: #38bdf8; }
 
+.log-qs { color: #fbbf24; }
+.log-qs .log-badge { background: rgba(245, 158, 11, 0.25); color: #fbbf24; }
+
+.log-chain { color: #c084fc; }
+.log-chain .log-badge { background: rgba(168, 85, 247, 0.25); color: #c084fc; }
+
+.log-llm { color: #f472b6; }
+.log-llm .log-badge { background: rgba(236, 72, 153, 0.25); color: #f472b6; }
+
+.terminal-tag.tag-agent { background: rgba(56, 189, 248, 0.25); color: #38bdf8; }
+.terminal-tag.tag-qs { background: rgba(245, 158, 11, 0.25); color: #fbbf24; }
+.terminal-tag.tag-chain { background: rgba(168, 85, 247, 0.25); color: #c084fc; }
+.terminal-tag.tag-llm { background: rgba(236, 72, 153, 0.25); color: #f472b6; }
+
 .btn-amber {
   border-color: rgba(245, 158, 11, 0.4);
   color: #f59e0b;

@@ -26,14 +26,17 @@
     return isNaN(d.getTime()) ? iso : d.toLocaleTimeString('en-US', { hour12: false });
   }
 
-  function getLogClass(type) {
-    const t = String(type || '').toLowerCase();
+  function getLogClass(type, category) {
+    const t = String(category || type || '').toLowerCase();
+    if (t.includes('agent')) return 'log-agent';
+    if (t.includes('qs')) return 'log-qs';
+    if (t.includes('chain')) return 'log-chain';
+    if (t.includes('llm')) return 'log-llm';
     if (t.includes('cache')) return 'log-cache';
     if (t.includes('rate') || t.includes('wait')) return 'log-ratelimit';
     if (t.includes('captcha')) return 'log-captcha';
     if (t.includes('error') || t.includes('failed')) return 'log-error';
     if (t.includes('timing')) return 'log-timing';
-    if (t.includes('agent') || t.includes('run') || t.includes('chain')) return 'log-agent';
     return 'log-info';
   }
 
@@ -42,6 +45,7 @@
       timestamp: entry.timestamp || new Date().toISOString(),
       level: entry.level || 'info',
       type: entry.type || 'info',
+      category: entry.category || (entry.type || 'info').toUpperCase(),
       slotId: entry.slotId || null,
       message: entry.message || (typeof entry === 'string' ? entry : JSON.stringify(entry)),
     };
@@ -110,12 +114,13 @@
 
     container.innerHTML = filtered
       .map((e) => {
-        const cls = getLogClass(e.type);
+        const cls = getLogClass(e.type, e.category);
         const slotTag = e.slotId ? `<span class="log-slot">Slot #${e.slotId}</span>` : '';
+        const categoryLabel = (e.category || e.type || 'info').toUpperCase();
         return `
           <div class="terminal-line ${cls}">
             <span class="log-time">${formatTime(e.timestamp)}</span>
-            <span class="log-badge">${(e.type || 'info').toUpperCase()}</span>
+            <span class="log-badge">${categoryLabel}</span>
             ${slotTag}
             <span class="log-msg">${escapeHTML(e.message)}</span>
           </div>
@@ -171,6 +176,9 @@
           <div class="btn-group" id="logs-type-tabs">
             <button class="btn btn-sm btn-outline active" data-type="all">ALL</button>
             <button class="btn btn-sm btn-outline" data-type="agent">AGENT</button>
+            <button class="btn btn-sm btn-outline" data-type="chain">CHAIN</button>
+            <button class="btn btn-sm btn-outline" data-type="qs">QS</button>
+            <button class="btn btn-sm btn-outline" data-type="llm">LLM</button>
             <button class="btn btn-sm btn-outline" data-type="browser">BROWSER</button>
             <button class="btn btn-sm btn-outline" data-type="cache">CACHE</button>
             <button class="btn btn-sm btn-outline" data-type="rate">RATE LIMIT</button>
@@ -254,7 +262,21 @@
 
       // Subscribe to real-time events
       if (window.engineAPI) {
-        if (window.engineAPI.onLog) unsubLog = window.engineAPI.onLog((e) => addEntry({ type: 'browser', message: e }));
+        if (window.engineAPI.onLog) {
+          unsubLog = window.engineAPI.onLog((e) => {
+            if (typeof e === 'string') {
+              addEntry({ timestamp: new Date().toISOString(), type: 'info', category: 'INFO', message: e });
+            } else {
+              addEntry({
+                timestamp: e.timestamp || new Date().toISOString(),
+                type: (e.category || e.level || 'info').toLowerCase(),
+                category: e.category || 'INFO',
+                slotId: e.slotId || null,
+                message: e.message || '',
+              });
+            }
+          });
+        }
         if (window.engineAPI.onCaptchaDetected) unsubCaptchaDet = window.engineAPI.onCaptchaDetected((e) => addEntry({ type: 'captcha', message: `CAPTCHA detected on ${e.domain} (Slot #${e.slotId})` }));
         if (window.engineAPI.onCaptchaResolved) unsubCaptchaRes = window.engineAPI.onCaptchaResolved((e) => addEntry({ type: 'captcha', message: `CAPTCHA resolved on Slot #${e.slotId}` }));
         if (window.engineAPI.onSlotsUpdated) unsubSlots = window.engineAPI.onSlotsUpdated((e) => addEntry({ type: 'browser', message: `Chrome Slots updated: ${JSON.stringify(e)}` }));

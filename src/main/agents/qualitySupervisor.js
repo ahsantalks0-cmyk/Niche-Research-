@@ -15,6 +15,7 @@
 
 const db = require('../db');
 const agentRegistry = require('../engine/agentRegistry');
+const llmClient = require('../llm/llmClient');
 
 /**
  * In-memory registry for per-agent quality rules.
@@ -338,22 +339,7 @@ function runStage1Checks(agentNumber, output, context = {}) {
  * @returns {Promise<{ verdict: 'pass' | 'send_back' | 'skip', feedback: string }>}
  */
 async function runStage2GeminiReview(agentNumber, output, context = {}) {
-  let apiKey = process.env.GEMINI_API_KEY || null;
-
-  if (!apiKey) {
-    try {
-      const settings = db.getSettings();
-      apiKey = settings?.gemini_api_key || null;
-    } catch {
-      // ignore
-    }
-  }
-
-  if (!apiKey) {
-    return { verdict: 'skip', feedback: 'Stage 2 skipped — no API key' };
-  }
-
-  // Only run Gemini check if agent output has textual/analytical content
+  // Only run Stage 2 check if agent output has textual/analytical content
   const outputText = typeof output === 'string' ? output : JSON.stringify(output);
   if (!outputText || outputText.length < 100) {
     return { verdict: 'skip', feedback: 'Stage 2 skipped — structural output' };
@@ -367,30 +353,27 @@ ${outputText.slice(0, 1500)}
 Evaluate: Is this analysis SPECIFIC and GROUNDED in data, or generic template fluff that could have been written without research?
 Reply with EXACTLY ONE line starting with either "PASS: <reason>" or "SEND-BACK: <reason>".`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-      }),
+    const res = await llmClient.chat({
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.2,
+      maxTokens: 300,
     });
 
-    if (!response.ok) {
-      return { verdict: 'skip', feedback: `Stage 2 skipped — Gemini API response status ${response.status}` };
+    if (!res.success) {
+      return { verdict: 'skip', feedback: `Stage 2 skipped — ${res.error}` };
     }
 
-    const data = await response.json();
-    const replyText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    const replyText = (res.content || '').trim();
 
     if (replyText.startsWith('SEND-BACK')) {
       return {
         verdict: 'send_back',
-        feedback: replyText.replace(/^SEND-BACK:\s*/, '') || 'Gemini semantic review flagged shallow or generic output',
+        feedback: replyText.replace(/^SEND-BACK:\s*/, '') || 'LLM semantic review flagged shallow or generic output',
       };
     } else {
       return {
         verdict: 'pass',
-        feedback: replyText.replace(/^PASS:\s*/, '') || 'Gemini semantic review verified specific, grounded analysis',
+        feedback: replyText.replace(/^PASS:\s*/, '') || 'LLM semantic review verified specific, grounded analysis',
       };
     }
   } catch (err) {

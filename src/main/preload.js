@@ -13,6 +13,7 @@ const VALID_EVENTS = new Set([
   'rate-limiter:wait',
   'engine:run-status',
   'engine:agent-status',
+  'engine:system-test-log',
 ]);
 
 /**
@@ -113,6 +114,11 @@ contextBridge.exposeInMainWorld('engineAPI', {
   /* Test Harness (Part 7) */
   runTest: (testName, args) => ipcRenderer.invoke('engine:run-test', testName, args),
 
+  /* System Tests Runner (P1.3c) */
+  listSystemTests: () => ipcRenderer.invoke('engine:list-system-tests'),
+  runSystemTest: (fileName) => ipcRenderer.invoke('engine:run-system-test', fileName),
+  onSystemTestLog: (cb) => on('engine:system-test-log', cb),
+
   /* Execution Chain (P1.2) */
   startRun: (runId, options) => ipcRenderer.invoke('engine:startRun', runId, options),
   approveRun: (runId, approvedNiches) => ipcRenderer.invoke('engine:approveRun', runId, approvedNiches),
@@ -128,5 +134,13 @@ contextBridge.exposeInMainWorld('engineAPI', {
   onRateLimiterWait: (cb) => on('rate-limiter:wait', cb),
   onRunStatus: (cb) => on('engine:run-status', cb),
   onAgentStatus: (cb) => on('engine:agent-status', cb),
+});
+
+contextBridge.exposeInMainWorld('llmAPI', {
+  listProviders: () => ipcRenderer.invoke('llm:getProviders'),
+  fetchModels: (providerId, apiKey) => ipcRenderer.invoke('llm:fetchModels', providerId, apiKey),
+  validateModel: (params) => ipcRenderer.invoke('llm:validateModel', params),
+  chat: (options) => ipcRenderer.invoke('llm:chat', options),
+  checkModelStatus: () => ipcRenderer.invoke('llm:checkModelStatus'),
 });
 
