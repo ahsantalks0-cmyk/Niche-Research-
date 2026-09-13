@@ -93,25 +93,64 @@ class SeniorConsultantAgent {
   /**
    * Inspects message text for proposed actions (e.g., start run, toggle schedule, delete schedule).
    * @param {string} text
+   * @param {number} [chatId]
    * @returns {object|null}
    */
-  detectActionProposal(text = '') {
+  detectActionProposal(text = '', chatId = null) {
     const lower = text.toLowerCase();
 
-    // 1. Start / Launch Run proposal
-    if (lower.includes('start run') || lower.includes('launch run') || lower.includes('run shuru') || lower.includes('naya run')) {
+    // Parse parameters
+    let qty = 3;
+    const qtyMatch = lower.match(/(\d+)\s*(?:niche|niches|run|runs)/i) || lower.match(/(?:nikalo|find|get|show)\s*(\d+)/i);
+    if (qtyMatch && qtyMatch[1]) {
+      const parsedQty = parseInt(qtyMatch[1], 10);
+      if (parsedQty >= 1 && parsedQty <= 10) qty = parsedQty;
+    }
+
+    const bModes = [];
+    if (lower.includes('blogging') || lower.includes('blog')) bModes.push('blogging');
+    if (lower.includes('affiliate')) bModes.push('affiliate');
+    if (lower.includes('ecommerce') || lower.includes('e-commerce') || lower.includes('store')) bModes.push('ecommerce');
+    if (lower.includes('digital') || lower.includes('course') || lower.includes('template')) bModes.push('digital_products');
+    if (bModes.length === 0) {
+      bModes.push('blogging', 'affiliate', 'ecommerce', 'digital_products');
+    }
+
+    const countryCodes = [];
+    if (lower.includes('us') || lower.includes('united states') || lower.includes('america')) countryCodes.push('US');
+    if (lower.includes('pk') || lower.includes('pakistan')) countryCodes.push('PK');
+    if (lower.includes('uk') || lower.includes('britain')) countryCodes.push('UK');
+    if (lower.includes('ca') || lower.includes('canada')) countryCodes.push('CA');
+    if (lower.includes('in') || lower.includes('india')) countryCodes.push('IN');
+    if (countryCodes.length === 0) countryCodes.push('US');
+
+    // 1. Start / Launch Run / Discovery proposal
+    const isRunTrigger = lower.includes('start run') ||
+      lower.includes('launch run') ||
+      lower.includes('run shuru') ||
+      lower.includes('naya run') ||
+      lower.includes('niches nikalo') ||
+      lower.includes('niche nikalo') ||
+      lower.includes('niches for') ||
+      lower.includes('find niches') ||
+      lower.includes('discover niches') ||
+      lower.includes('research run') ||
+      (lower.includes('niches') && (lower.includes('nikalo') || lower.includes('chahiye') || lower.includes('batao') || lower.includes('find') || lower.includes('get')));
+
+    if (isRunTrigger) {
       return {
         type: 'action_proposal',
         action: 'start_run',
-        title: 'Propose New Market Research Run',
+        title: `Launch ${qty}-Niche Discovery Run (${countryCodes.join(', ')})`,
         payload: {
-          run_name: 'Consultant Initiated Research',
+          run_name: `Consultant Discovery (${bModes.join(', ')})`,
           input_mode: 'discovery',
-          business_modes: ['blogging', 'affiliate', 'ecommerce', 'digital_products'],
-          niche_quantity: 3,
-          country_codes: ['US'],
+          business_modes: bModes,
+          niche_quantity: qty,
+          country_codes: countryCodes,
+          chat_id: chatId,
         },
-        description: 'Launch a 3-niche market discovery run across US markets.',
+        description: `Launch a ${qty}-niche market discovery run across ${countryCodes.join(', ')} markets for ${bModes.join(', ')}.`,
       };
     }
 
@@ -124,7 +163,7 @@ class SeniorConsultantAgent {
         type: 'action_proposal',
         action: 'toggle_schedule',
         title: `${enable ? 'Enable' : 'Disable'} Schedule #${scheduleId}`,
-        payload: { schedule_id: scheduleId, enable },
+        payload: { schedule_id: scheduleId, enable, chat_id: chatId },
         description: `Set Schedule #${scheduleId} state to ${enable ? 'Active' : 'Disabled'}.`,
       };
     }
@@ -137,7 +176,7 @@ class SeniorConsultantAgent {
         type: 'action_proposal',
         action: 'delete_schedule',
         title: `Delete Schedule #${scheduleId}`,
-        payload: { schedule_id: scheduleId },
+        payload: { schedule_id: scheduleId, chat_id: chatId },
         description: `Permanently delete Schedule #${scheduleId} from SQLite database.`,
       };
     }
@@ -170,23 +209,28 @@ class SeniorConsultantAgent {
     // 2. Build Context Digest
     const digest = this.getSystemContextDigest();
     const isRoman = this.isRomanUrdu(messageText);
-    const actionProposal = this.detectActionProposal(messageText);
+    const actionProposal = this.detectActionProposal(messageText, chatId);
 
     // 3. Construct System Prompt
     const systemPrompt = `You are the Senior Niche Research Consultant (15+ years experience) for the Niche Research Department.
 You provide executive advice on market opportunity, niche validation, business monetization models, competitive barriers, and department operations.
 
-CRITICAL INSTRUCTIONS:
-1. LANGUAGE MATCHING: The user wrote in ${isRoman ? 'Roman Urdu (Pakistani English script)' : 'English'}. You MUST respond in ${isRoman ? 'Roman Urdu' : 'English'}.
-2. ZERO FABRICATION: Use real database information provided in the context below. Never invent metrics, revenue figures, or run stats.
-3. ACTION FORWARDING: If proposing an action, include clear details so the user can review before confirming.
+CRITICAL HARD RULES FOR INTEGRITY & HONESTY:
+1. NEVER INVENT NICHES, STATISTICS, OR RESEARCH RESULTS.
+   If the user asks for niches, research results, or specific recommendations, check the database context below.
+   If the database currently has 0 scored/discovered niches (Total Scored Niches in DB: ${digest.counts?.niches || 0}), you MUST state plainly that no niches exist in the database yet.
+   Offer to start a real Discovery run to find real ones.
+2. NEVER CLAIM AN ACTION WAS PERFORMED WITHOUT EXECUTION.
+   Never say "Queue mein dal diya" or "Run started" in your message text unless an action has actually executed and returned a real Run ID.
+   When proposing a run, state clearly that an Action Proposal card has been attached below for the user to confirm.
+3. LANGUAGE MATCHING: The user wrote in ${isRoman ? 'Roman Urdu (Pakistani English script)' : 'English'}. You MUST respond in ${isRoman ? 'Roman Urdu' : 'English'}.
 
 CURRENT REAL DATABASE CONTEXT DIGEST:
 - Total Research Runs: ${digest.counts?.runs || 0}
-- Total Scored Niches: ${digest.counts?.niches || 0}
+- Total Scored Niches in DB: ${digest.counts?.niches || 0}
 - Active Schedules: ${digest.schedules?.length || 0}
 - Quality Pass Rate: ${digest.qualityStats?.passRate ? (digest.qualityStats.passRate * 100).toFixed(1) + '%' : '100%'}
-- Recent Runs: ${JSON.stringify(digest.recentRuns || [])}
+- Recent Runs in DB: ${JSON.stringify(digest.recentRuns || [])}
 - Top Scored Niches in DB: ${JSON.stringify(digest.topNiches || [])}
 - Active Schedules List: ${JSON.stringify(digest.schedules || [])}
 `;
@@ -281,17 +325,29 @@ CURRENT REAL DATABASE CONTEXT DIGEST:
     if (action === 'start_run') {
       const { chainEngine } = require('../engine/chainEngine');
       const runData = {
-        run_name: payload.run_name || 'Consultant Run',
+        run_name: payload.run_name || 'Consultant Discovery Run',
         input_mode: payload.input_mode || 'discovery',
-        business_modes: payload.business_modes || ['blogging'],
-        niche_quantity: payload.niche_quantity || 1,
+        business_modes: payload.business_modes || ['blogging', 'affiliate', 'ecommerce', 'digital_products'],
+        niche_quantity: payload.niche_quantity || 3,
         auto_approve: true,
+        trigger_source: 'chat',
       };
       const countryCodes = payload.country_codes || ['US'];
       const newRun = db.createRun(runData, countryCodes, null);
       
       // Launch run
       chainEngine.startRun(newRun.id, { autoApprove: true });
+
+      if (payload.chat_id) {
+        db.addConsultantMessage(
+          payload.chat_id,
+          'assistant',
+          `✅ **Run #${newRun.id} ("${newRun.run_name}") created & launched!**\n` +
+          `Status: \`discovery\` / \`executing\`.\n` +
+          `Aap **Runs** page par live execution aur discovered niches dekh sakte hain!`
+        );
+      }
+
       return {
         success: true,
         action,

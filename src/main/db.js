@@ -19,6 +19,7 @@ const migrationV6 = require('./migrations/v6');
 const migrationV7 = require('./migrations/v7');
 const migrationV8 = require('./migrations/v8');
 const migrationV9 = require('./migrations/v9');
+const migrationV10 = require('./migrations/v10');
 
 const MIGRATIONS = [
   migrationV1,
@@ -30,6 +31,7 @@ const MIGRATIONS = [
   migrationV7,
   migrationV8,
   migrationV9,
+  migrationV10,
 ];
 
 let _db = null;
@@ -381,6 +383,10 @@ function getSettings() {
     ai_model_invalid: row.ai_model_invalid !== undefined ? Number(row.ai_model_invalid) : 0,
     aiModelInvalidReason: row.ai_model_invalid_reason || '',
     ai_model_invalid_reason: row.ai_model_invalid_reason || '',
+    jarvisEnabled: row.jarvis_enabled !== undefined ? Number(row.jarvis_enabled) : 0,
+    jarvis_enabled: row.jarvis_enabled !== undefined ? Number(row.jarvis_enabled) : 0,
+    jarvisPort: row.jarvis_port !== undefined ? Number(row.jarvis_port) : 47821,
+    jarvis_port: row.jarvis_port !== undefined ? Number(row.jarvis_port) : 47821,
   };
 }
 

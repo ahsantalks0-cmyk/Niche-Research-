@@ -199,6 +199,58 @@ registerQualityRules(5, {
   },
 });
 
+// Agent #6: Niche Discovery Agent (Agent #6)
+registerQualityRules(6, {
+  outputType: 'research',
+  requiredFields: ['candidates_count', 'candidates'],
+  customCheck: (rawOutput) => {
+    const failedRules = [];
+    const output = rawOutput.discovery_result || rawOutput;
+    const candidates = output.candidates || [];
+
+    if (!Array.isArray(candidates) || candidates.length === 0) {
+      failedRules.push({
+        rule: 'R1_NON_EMPTY',
+        expected: 'at least 1 candidate niche',
+        actual: '0 candidates generated',
+      });
+    } else {
+      const GENERIC_STOPLIST = new Set([
+        'health', 'fitness', 'money', 'tech', 'food', 'pets', 'fashion', 'travel',
+        'business', 'sports', 'shopping', 'general', 'lifestyle', 'home', 'education'
+      ]);
+
+      for (let i = 0; i < candidates.length; i++) {
+        const c = candidates[i];
+        const name = (c.niche_name || c.name || '').trim();
+        const words = name.split(/\s+/);
+
+        if (!name || words.length < 2 || GENERIC_STOPLIST.has(name.toLowerCase())) {
+          failedRules.push({
+            rule: 'R3_SPECIFICITY',
+            expected: `candidate #${i + 1} to be specific multi-word niche`,
+            actual: `generic or empty name: "${name}"`,
+          });
+        }
+
+        if (!c.signal_evidence && !c.evidence) {
+          failedRules.push({
+            rule: 'R4_EVIDENCE_GROUNDING',
+            expected: `candidate #${i + 1} to contain signal_evidence`,
+            actual: 'missing signal_evidence',
+          });
+        }
+      }
+    }
+
+    return {
+      passed: failedRules.length === 0,
+      failedRules,
+      feedback: failedRules.map((f) => `${f.rule}: expected ${f.expected}, got ${f.actual}`).join('; '),
+    };
+  },
+});
+
 /* ══════════════════════════════════════════════════════════════
    GENERIC QUALITY RULE CHECKERS (STAGE 1)
    ══════════════════════════════════════════════════════════════ */

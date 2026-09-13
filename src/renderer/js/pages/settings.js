@@ -1203,7 +1203,10 @@
             window.NRDSettings.autoApprove = auto.checked;
           }
           if (lang) lang.value = dbSet.language || 'en';
-          if (keyJarvis && dbSet.jarvisApiKey) keyJarvis.value = dbSet.jarvisApiKey;
+          if (keyJarvis && (dbSet.jarvisApiKey || dbSet.jarvis_api_key)) keyJarvis.value = dbSet.jarvisApiKey || dbSet.jarvis_api_key;
+          if (setJarvisEnabled) setJarvisEnabled.checked = Boolean(dbSet.jarvis_enabled || dbSet.jarvisEnabled);
+          if (setJarvisPort && (dbSet.jarvis_port || dbSet.jarvisPort)) setJarvisPort.value = dbSet.jarvis_port || dbSet.jarvisPort;
+          updateJarvisCurlPreview();
 
           if (dbSet.aiProvider && aiProviderSelect) {
             aiProviderSelect.value = dbSet.aiProvider;
