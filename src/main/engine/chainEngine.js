@@ -30,6 +30,7 @@
 const { EventEmitter } = require('node:events');
 const db = require('../db');
 const agentRegistry = require('./agentRegistry');
+const { emitLog } = require('./logBus');
 
 // Ensure registered agents (1–3) are loaded into Agent Registry
 try {
@@ -89,6 +90,26 @@ class ChainEngine extends EventEmitter {
       throw new Error(`Run #${runIdNum} not found in database.`);
     }
 
+    this.runStartTimes = this.runStartTimes || new Map();
+    this.runStartTimes.set(runIdNum, Date.now());
+
+    // Extract brief details for structured CHAIN start event
+    let briefData = null;
+    const critRow = dbInstance.prepare('SELECT parsed_brief FROM run_criteria WHERE run_id = ?').get(runIdNum);
+    try {
+      if (critRow?.parsed_brief) briefData = JSON.parse(critRow.parsed_brief);
+    } catch {}
+
+    const inputMode = briefData?.input_mode || run.input_mode || 'manual';
+    const bModes = (briefData?.business_modes && briefData.business_modes.length > 0)
+      ? briefData.business_modes.join(',')
+      : (run.business_modes || 'all');
+    const nicheQty = briefData?.niche_quantity || run.niche_quantity || 1;
+    const countriesList = Array.isArray(briefData?.countries?.list)
+      ? briefData.countries.list.join(',')
+      : (run.target_countries || 'all');
+
+    emitLog('CHAIN', `▶️ Run #${runIdNum} started — mode=${inputMode}, modes=${bModes}, niches=${nicheQty}, countries=${countriesList}`, { runId: runIdNum });
     engine.log('info', `🚀 Chain Engine: Starting execution for Run #${runIdNum} (status: ${run.status})…`);
 
     // 1. Ensure Agent #2 (Criteria Parser) has run AND been reviewed by QS
@@ -100,6 +121,7 @@ class ChainEngine extends EventEmitter {
       const ag2Spec = { number: 2, name: 'Criteria Parser Agent', critical: true };
       const parseResult = await this._executeAgentWithRetry(runIdNum, ag2Spec);
       if (parseResult?.failed || parseResult?.error) {
+        emitLog('CHAIN', `💥 Run #${runIdNum} failed — ${parseResult?.error || 'Criteria parse failed'}`, { runId: runIdNum });
         dbInstance.prepare(`UPDATE research_runs SET status = 'failed', error_summary = ? WHERE id = ?`)
           .run(parseResult?.error || 'Criteria parse failed', runIdNum);
         return { success: false, status: 'failed', error: parseResult?.error };
@@ -130,6 +152,15 @@ class ChainEngine extends EventEmitter {
       }
     }
 
+    // Emit plan built event
+    const phases = plan?.phases || [];
+    let totalAgents = 0;
+    phases.forEach((p) => {
+      totalAgents += (p.agents?.length || 0);
+    });
+    const autoApproveStr = run.auto_approve ? 'auto-approve on' : 'auto-approve off';
+    emitLog('CHAIN', `📋 Execution plan built — ${phases.length} phases, ${totalAgents} agents (${autoApproveStr})`, { runId: runIdNum });
+
     // Mark active in memory
     this.activeRuns.set(runIdNum, {
       isPaused: false,
@@ -150,6 +181,7 @@ class ChainEngine extends EventEmitter {
 
     // Execute chain loop
     const executionPromise = this._executeChain(runIdNum, plan, options).catch((err) => {
+      emitLog('CHAIN', `💥 Run #${runIdNum} failed — ${err.message}`, { runId: runIdNum });
       engine.log('error', `❌ Chain Engine: Fatal execution error on Run #${runIdNum}: ${err.message}`);
       dbInstance.prepare(`
         UPDATE research_runs 
@@ -252,6 +284,7 @@ class ChainEngine extends EventEmitter {
 
         if (!autoApprove && !alreadyApproved) {
           // Pause execution and enter 'awaiting_approval'
+          emitLog('CHAIN', '🚦 Approval gate reached — awaiting user decision', { runId });
           engine.log('info', `🛑 Chain Engine: Reached Approval Gate for Run #${runId}. Halting for user review.`);
           this._saveChainState(runId, { phase: 'deep_research', step: 0, waitingForApproval: true });
 
@@ -265,6 +298,7 @@ class ChainEngine extends EventEmitter {
           this.activeRuns.delete(runId);
           return;
         } else {
+          emitLog('CHAIN', '⚡ Auto-approved — continuing', { runId });
           engine.log('info', `⚡ Chain Engine: Approval Gate auto-passed for Run #${runId} (auto_approve=${autoApprove})`);
           dbInstance.prepare(`
             UPDATE research_runs 
@@ -277,12 +311,18 @@ class ChainEngine extends EventEmitter {
 
     // All phases complete!
     const completedAt = new Date().toISOString();
+    const tStart = this.runStartTimes?.get(runId) || Date.now();
+    const elapsedMs = Date.now() - tStart;
+    const elapsedSec = (elapsedMs / 1000).toFixed(1);
+    const elapsedStr = elapsedMs >= 1000 ? `${elapsedSec}s` : `${elapsedMs}ms`;
+
     dbInstance.prepare(`
       UPDATE research_runs 
       SET status = 'completed', completed_at = ?, chain_state = NULL, updated_at = datetime('now')
       WHERE id = ?
     `).run(completedAt, runId);
 
+    emitLog('CHAIN', `🏁 Run #${runId} completed — ${elapsedStr}`, { runId });
     engine.log('info', `🏁 Chain Engine: Run #${runId} successfully completed all phases!`);
     this.emitStatusUpdate(runId, 'completed');
     this.activeRuns.delete(runId);
@@ -305,6 +345,7 @@ class ChainEngine extends EventEmitter {
 
     if (!isRegistered) {
       // Gracefully skip pending agent (built in future prompts)
+      emitLog('AGENT', `⏭ Agent #${agentNum} (${agentSpec.name}) skipped — not registered yet`, { runId, agentNumber: agentNum });
       engine.log('info', `⏩ Chain Engine: Agent #${agentNum} (${agentSpec.name}) is pending implementation in a later prompt — skipped gracefully.`);
       
       // Keep agent_status as idle/pending or update summary
@@ -340,6 +381,7 @@ class ChainEngine extends EventEmitter {
         `).run(startedAt, attempt, runId, agentNum);
 
         this.emitAgentUpdate(runId, agentNum, 'running');
+        emitLog('AGENT', `🔄 Agent #${agentNum} (${regAgent.name}) started`, { runId, agentNumber: agentNum });
 
         const logMsg = currentQsFeedback
           ? `🤖 Chain Engine: Re-invoking Agent #${agentNum} (${regAgent.name}) [QS Send-back Round ${reviewRound - 1}]…`
@@ -480,6 +522,10 @@ class ChainEngine extends EventEmitter {
 
         this.emitAgentUpdate(runId, agentNum, 'done');
 
+        const summary = typeof result === 'object' && result?.summary ? result.summary : 'Executed successfully';
+        const oneLineSummary = String(summary).split('\n')[0].slice(0, 80);
+        emitLog('AGENT', `✅ Agent #${agentNum} (${regAgent.name}) done — ${oneLineSummary} (${durationMs}ms)`, { runId, agentNumber: agentNum, durationMs });
+
         // Also update Agent #3 (Quality Supervisor) status row
         try {
           const summary = db.getQualitySummary(runId);
@@ -544,6 +590,7 @@ class ChainEngine extends EventEmitter {
     `).run(finishedAt, lastErr?.message || 'Execution error', runId, agentNum);
 
     this.emitAgentUpdate(runId, agentNum, 'failed');
+    emitLog('AGENT', `❌ Agent #${agentNum} failed — ${lastErr?.message || 'Execution error'}`, { runId, agentNumber: agentNum });
 
     if (isCritical) {
       throw new Error(`Critical Agent #${agentNum} (${agentSpec.name}) failed after ${maxRetries} retries: ${lastErr?.message}`);
@@ -565,6 +612,7 @@ class ChainEngine extends EventEmitter {
     const dbInstance = db.getDb();
     const engine = this.getBrowserEngine();
 
+    emitLog('CHAIN', '✅ Approved by user — resuming', { runId: runIdNum });
     engine.log('info', `✅ Chain Engine: Approval received for Run #${runIdNum}! Resuming into Deep Research…`);
 
     // 1. Mark approval_gate_passed = 1
@@ -601,6 +649,7 @@ class ChainEngine extends EventEmitter {
     const remainingPlan = { ...plan, phases: remainingPhases };
 
     const execPromise = this._executeChain(runIdNum, remainingPlan, options).catch((err) => {
+      emitLog('CHAIN', `💥 Run #${runIdNum} failed — ${err.message}`, { runId: runIdNum });
       engine.log('error', `❌ Chain Engine: Post-approval execution error for Run #${runIdNum}: ${err.message}`);
       dbInstance.prepare(`UPDATE research_runs SET status = 'failed', error_summary = ? WHERE id = ?`).run(err.message, runIdNum);
       this.emitStatusUpdate(runIdNum, 'failed');
@@ -626,6 +675,7 @@ class ChainEngine extends EventEmitter {
     if (ctrl) {
       ctrl.isPaused = true;
     }
+    emitLog('CHAIN', '⏸ Run paused', { runId: runIdNum });
     const dbInstance = db.getDb();
     dbInstance.prepare(`UPDATE research_runs SET status = 'planning', updated_at = datetime('now') WHERE id = ?`).run(runIdNum);
     this.emitStatusUpdate(runIdNum, 'paused');
@@ -642,6 +692,7 @@ class ChainEngine extends EventEmitter {
     if (ctrl) {
       ctrl.isCancelled = true;
     }
+    emitLog('CHAIN', '🛑 Run cancelled', { runId: runIdNum });
     const dbInstance = db.getDb();
     dbInstance.prepare(`UPDATE research_runs SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?`).run(runIdNum);
     this.emitStatusUpdate(runIdNum, 'cancelled');

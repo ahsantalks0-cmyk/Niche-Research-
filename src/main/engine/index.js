@@ -222,6 +222,7 @@ const testHarness = {
 
 const { chainEngine } = require('./chainEngine');
 const agentRegistry = require('./agentRegistry');
+const { logBus, emitLog } = require('./logBus');
 
 module.exports = {
   browserEngine,
@@ -236,5 +237,7 @@ module.exports = {
   testHarness,
   chainEngine,
   agentRegistry,
+  logBus,
+  emitLog,
 };
 

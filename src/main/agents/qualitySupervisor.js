@@ -16,6 +16,7 @@
 const db = require('../db');
 const agentRegistry = require('../engine/agentRegistry');
 const llmClient = require('../llm/llmClient');
+const { emitLog } = require('../engine/logBus');
 
 /**
  * In-memory registry for per-agent quality rules.
@@ -338,12 +339,16 @@ function runStage1Checks(agentNumber, output, context = {}) {
  * @param {object} context
  * @returns {Promise<{ verdict: 'pass' | 'send_back' | 'skip', feedback: string }>}
  */
-async function runStage2GeminiReview(agentNumber, output, context = {}) {
+async function runStage2GeminiReview(agentNumber, output, context = {}, runId = null) {
   // Only run Stage 2 check if agent output has textual/analytical content
   const outputText = typeof output === 'string' ? output : JSON.stringify(output);
   if (!outputText || outputText.length < 100) {
+    emitLog('QS', '⏩ Stage 2 skipped — structural output', { runId, agentNumber });
     return { verdict: 'skip', feedback: 'Stage 2 skipped — structural output' };
   }
+
+  const t0_stage2 = Date.now();
+  emitLog('QS', '🧠 Running Stage 2 semantic review via Gemini...', { runId, agentNumber });
 
   try {
     const prompt = `You are the Quality Supervisor Agent reviewing an AI agent's analysis output for an automated market research application.
@@ -360,23 +365,30 @@ Reply with EXACTLY ONE line starting with either "PASS: <reason>" or "SEND-BACK:
     });
 
     if (!res.success) {
+      emitLog('QS', `⏩ Stage 2 skipped — ${res.error}`, { runId, agentNumber });
       return { verdict: 'skip', feedback: `Stage 2 skipped — ${res.error}` };
     }
 
     const replyText = (res.content || '').trim();
+    const durationMs = Date.now() - t0_stage2;
 
     if (replyText.startsWith('SEND-BACK')) {
+      const reason = replyText.replace(/^SEND-BACK:\s*/, '') || 'LLM semantic review flagged shallow or generic output';
+      emitLog('QS', `❌ Stage 2 semantic review flagged: ${reason}`, { runId, agentNumber });
       return {
         verdict: 'send_back',
-        feedback: replyText.replace(/^SEND-BACK:\s*/, '') || 'LLM semantic review flagged shallow or generic output',
+        feedback: reason,
       };
     } else {
+      const passReason = replyText.replace(/^PASS:\s*/, '') || 'LLM semantic review verified specific, grounded analysis';
+      emitLog('QS', `✅ Stage 2 semantic review passed (${durationMs}ms)`, { runId, agentNumber, durationMs });
       return {
         verdict: 'pass',
-        feedback: replyText.replace(/^PASS:\s*/, '') || 'LLM semantic review verified specific, grounded analysis',
+        feedback: passReason,
       };
     }
   } catch (err) {
+    emitLog('QS', `⏩ Stage 2 skipped — API error: ${err.message}`, { runId, agentNumber });
     return { verdict: 'skip', feedback: `Stage 2 skipped — API error: ${err.message}` };
   }
 }
@@ -402,6 +414,8 @@ async function reviewOutput({ runId, agentNumber, output, context = {}, reviewRo
   const runIdNum = Number(runId);
   const agentNum = Number(agentNumber);
 
+  emitLog('QS', `🔍 Reviewing Agent #${agentNum} output (round ${reviewRound})`, { runId: runIdNum, agentNumber: agentNum });
+
   if (engine) {
     engine.log('info', `🛡️ QS: Reviewing Agent #${agentNum} output (Round ${reviewRound})…`);
   }
@@ -410,12 +424,23 @@ async function reviewOutput({ runId, agentNumber, output, context = {}, reviewRo
   const stage1Result = runStage1Checks(agentNum, output, context);
   const stage1Verdict = stage1Result.passed ? 'pass' : 'fail';
 
+  const registered = agentRulesRegistry.get(agentNum);
+  const totalRules = 5 + (registered?.requiredFields?.length || 0) + Object.keys(registered?.depthMarkers || {}).length;
+  const passedCount = Math.max(1, totalRules - stage1Result.failedRules.length);
+
+  if (stage1Result.passed) {
+    emitLog('QS', `✅ Agent #${agentNum} passed Stage 1 (${passedCount}/${totalRules} rules)`, { runId: runIdNum, agentNumber: agentNum });
+  } else {
+    const failedList = stage1Result.failedRules.map((f) => (typeof f === 'string' ? f : f.rule)).join(', ');
+    emitLog('QS', `❌ Agent #${agentNum} failed Stage 1 — rules: ${failedList}`, { runId: runIdNum, agentNumber: agentNum });
+  }
+
   let stage2Verdict = 'skip';
   let stage2Feedback = '';
 
   // 2. Stage 2 Gemini Semantic Review (only if Stage 1 passes)
   if (stage1Result.passed) {
-    const stage2Result = await runStage2GeminiReview(agentNum, output, context);
+    const stage2Result = await runStage2GeminiReview(agentNum, output, context, runIdNum);
     stage2Verdict = stage2Result.verdict;
     stage2Feedback = stage2Result.feedback;
   }
@@ -436,6 +461,13 @@ async function reviewOutput({ runId, agentNumber, output, context = {}, reviewRo
   const durationMs = Date.now() - t0;
   const failedRuleCodes = stage1Result.failedRules.map((f) => (typeof f === 'string' ? f : f.rule));
 
+  if (overallVerdict === 'send_back') {
+    const summaryReason = (combinedFeedback || 'failed quality check').slice(0, 100);
+    emitLog('QS', `🔁 Send-back #${reviewRound} to Agent #${agentNum} — reason: ${summaryReason}`, { runId: runIdNum, agentNumber: agentNum });
+  } else if (overallVerdict === 'escalated') {
+    emitLog('QS', `🚨 Escalated Agent #${agentNum} to human review — max retries reached`, { runId: runIdNum, agentNumber: agentNum });
+  }
+
   // 4. Save review in DB
   try {
     db.insertQualityReview({
@@ -449,6 +481,11 @@ async function reviewOutput({ runId, agentNumber, output, context = {}, reviewRo
       feedback_text: combinedFeedback,
       duration_ms: durationMs,
     });
+
+    const qSummary = db.getQualitySummary(runIdNum);
+    if (qSummary && qSummary.totalReviews > 0) {
+      emitLog('QS', `🛡️ Total run quality: ${qSummary.totalPassed}/${qSummary.totalReviews} passed, ${qSummary.totalSendBacks} send-backs`, { runId: runIdNum });
+    }
   } catch (err) {
     if (engine) {
       engine.log('warn', `⚠️ QS: Failed to write quality_reviews DB row: ${err.message}`);

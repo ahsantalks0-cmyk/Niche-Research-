@@ -57,6 +57,28 @@
   }
 
   async function loadHistoricalLogs() {
+    if (window.engineAPI && window.engineAPI.getRecentLogs) {
+      try {
+        const recent = await window.engineAPI.getRecentLogs({ limit: 200 });
+        if (Array.isArray(recent) && recent.length > 0) {
+          recent.forEach((e) => {
+            logEntries.push({
+              timestamp: e.timestamp || new Date().toISOString(),
+              level: e.level || 'info',
+              type: (e.category || e.level || 'info').toLowerCase(),
+              category: e.category || 'INFO',
+              slotId: e.slotId || null,
+              message: e.message || '',
+            });
+          });
+          renderLogs();
+          return;
+        }
+      } catch (err) {
+        console.warn('[logs-page] Failed to fetch recent log bus entries:', err);
+      }
+    }
+
     if (window.engineAPI && window.engineAPI.getTimingLogs) {
       try {
         const logs = await window.engineAPI.getTimingLogs({ limit: 100 });
@@ -66,6 +88,7 @@
               timestamp: l.created_at || new Date().toISOString(),
               level: 'info',
               type: l.cache_hit ? 'cache' : 'timing',
+              category: l.cache_hit ? 'CACHE' : 'TIMING',
               slotId: l.slot_id || null,
               message: `[${l.operation}] ${l.url || l.domain || ''} (${l.duration_ms}ms) ${l.cache_hit ? '• CACHE HIT' : ''}`,
             });
@@ -85,9 +108,15 @@
     let filtered = logEntries;
 
     if (activeTypeFilter !== 'all') {
+      const filter = activeTypeFilter.toLowerCase();
       filtered = filtered.filter((e) => {
-        const t = (e.type + ' ' + e.message).toLowerCase();
-        return t.includes(activeTypeFilter);
+        const cat = String(e.category || '').toLowerCase();
+        const typ = String(e.type || '').toLowerCase();
+        const msg = String(e.message || '').toLowerCase();
+        if (filter === 'rate') {
+          return cat.includes('rate') || typ.includes('rate') || msg.includes('rate limit');
+        }
+        return cat.includes(filter) || typ.includes(filter) || msg.includes(filter);
       });
     }
 

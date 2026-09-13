@@ -290,6 +290,24 @@
         const res = await fetch('/api/engine/agents');
         return await res.json();
       },
+      getRecentLogs: async (opts) => {
+        try {
+          const limit = opts?.limit || 200;
+          const cat = opts?.category ? `&category=${encodeURIComponent(opts.category)}` : '';
+          const res = await fetch(`/api/engine/recent-logs?limit=${limit}${cat}`);
+          return await res.json();
+        } catch {
+          return [];
+        }
+      },
+      clearLogs: async () => {
+        try {
+          const res = await fetch('/api/engine/clear-logs', { method: 'POST' });
+          return await res.json();
+        } catch {
+          return { success: false };
+        }
+      },
       runTest: async (testName) => {
         await new Promise((r) => setTimeout(r, 600));
         return {

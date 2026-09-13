@@ -21,6 +21,7 @@ const human = require('./human');
 const { rateLimiter } = require('./rate-limiter');
 const { engineCache } = require('./cache');
 const { slotPool } = require('./pool');
+const { emitLog } = require('./logBus');
 
 // Private registry of browser contexts created exclusively by this department (Part 5)
 const OWNED_CONTEXTS = new Set();
@@ -72,7 +73,6 @@ class BrowserEngine extends EventEmitter {
   }
 
   log(level, msg, meta = {}) {
-    const timestamp = meta.timestamp || new Date().toISOString();
     let category = meta.category || null;
 
     if (!category) {
@@ -97,19 +97,9 @@ class BrowserEngine extends EventEmitter {
       }
     }
 
-    const entry = {
-      level: level || 'info',
-      category: category.toUpperCase(),
-      message: msg,
-      timestamp,
-      slotId: meta.slotId || null,
-      details: meta.details || null,
-      ...meta,
-    };
+    const entry = emitLog(category, msg, { level, ...meta });
     this.emit('log', entry);
-    // Also print to stdout
-    const prefix = `[NRD · ${entry.category}]`;
-    console.log(`${prefix} ${msg}`);
+    return entry;
   }
 
   /**

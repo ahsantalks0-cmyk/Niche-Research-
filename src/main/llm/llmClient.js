@@ -9,6 +9,7 @@
 const db = require('../db');
 const { getProvider, listProviders } = require('./llmProviders');
 const httpClient = require('./httpClient');
+const { emitLog } = require('../engine/logBus');
 
 let activeRefreshInterval = null;
 
@@ -76,6 +77,8 @@ async function fetchModels(providerId, apiKey) {
     return result;
   }
 
+  emitLog('LLM', `📋 Models refreshed: ${result.models.length} models available for ${provider.name}`, { provider: providerId, count: result.models.length });
+
   // Update DB cache
   try {
     const settings = db.getSettings() || {};
@@ -123,6 +126,7 @@ async function validateModel({ providerId, modelId, apiKey }) {
     };
   }
 
+  const t0_val = Date.now();
   const res = await chat({
     providerId,
     modelId,
@@ -130,8 +134,10 @@ async function validateModel({ providerId, modelId, apiKey }) {
     messages: [{ role: 'user', content: 'Reply with: OK' }],
     maxTokens: 10,
   });
+  const valLatency = Date.now() - t0_val;
 
   if (res.success) {
+    emitLog('LLM', `🔍 Model validation: ${providerId}/${modelId} -> OK (${valLatency}ms)`, { provider: providerId, model: modelId, durationMs: valLatency });
     return {
       ok: true,
       success: true,
@@ -139,6 +145,7 @@ async function validateModel({ providerId, modelId, apiKey }) {
       providerMessage: 'Validation succeeded',
     };
   } else {
+    emitLog('LLM', `❌ Model validation failed: ${providerId}/${modelId} -> ${res.providerMessage || res.error}`, { provider: providerId, model: modelId });
     return {
       ok: false,
       success: false,
@@ -204,6 +211,13 @@ async function chat(options = {}) {
     fetchUrl += (fetchUrl.includes('?') ? '&' : '?') + query;
   }
 
+  const promptChars = (options.messages || []).reduce((acc, m) => acc + (m.content ? m.content.length : 0), 0);
+  emitLog('LLM', `🌐 Request sent to ${provider.name}/${modelId} (prompt length: ${promptChars} chars)`, {
+    provider: providerId,
+    model: modelId,
+    promptChars,
+  });
+
   const t0 = Date.now();
   const logger = getBrowserEngine();
 
@@ -230,6 +244,21 @@ async function chat(options = {}) {
       errTextLower.includes('credit_balance')
     );
 
+    const errReason = res.providerMessage || res.error || 'Unknown error';
+    emitLog('LLM', `❌ Request failed (${provider.name}/${modelId}) — status ${res.status || 'ERR'}: ${errReason}`, {
+      provider: providerId,
+      model: modelId,
+      status: res.status,
+      error: errReason,
+    });
+
+    if (res.status === 429 || isBilling) {
+      emitLog('RATE LIMIT', `⚠️ Quota/rate limit reached on ${provider.name} — status ${res.status}: ${errReason}`, {
+        provider: providerId,
+        model: modelId,
+      });
+    }
+
     return {
       ok: false,
       success: false,
@@ -249,6 +278,16 @@ async function chat(options = {}) {
 
   try {
     const parsed = provider.parseChatResponse(res.data);
+    const tokens = parsed.usage?.totalTokens || (parsed.usage?.promptTokens || 0) + (parsed.usage?.completionTokens || 0);
+    const tokenStr = tokens > 0 ? `${tokens} tokens` : `${parsed.text?.length || 0} chars`;
+
+    emitLog('LLM', `📥 Response received from ${provider.name}/${modelId} in ${latencyMs}ms — ${tokenStr}`, {
+      provider: providerId,
+      model: modelId,
+      latencyMs,
+      usage: parsed.usage,
+    });
+
     logger.log('info', `[LLM] ${provider.name} (${modelId}) responded in ${latencyMs}ms (${parsed.usage?.totalTokens || 0} tokens)`, {
       category: 'LLM',
       provider: providerId,
@@ -270,6 +309,12 @@ async function chat(options = {}) {
       model: modelId,
     };
   } catch (parseErr) {
+    emitLog('LLM', `❌ Request failed (${provider.name}/${modelId}) — parse error: ${parseErr.message}`, {
+      provider: providerId,
+      model: modelId,
+      error: parseErr.message,
+    });
+
     return {
       ok: false,
       success: false,

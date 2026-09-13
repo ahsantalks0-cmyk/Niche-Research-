@@ -247,8 +247,18 @@ function registerEngineIpc(mainWindow) {
     return await llmClient.checkSelectedModelStatus();
   });
 
+  const { logBus } = require('./engine/logBus');
+  ipcMain.handle('engine:get-recent-logs', (_e, options) => {
+    return logBus.getRecentLogs(options);
+  });
+  ipcMain.handle('engine:clear-logs', () => {
+    logBus.clear();
+    return { success: true };
+  });
+
   const { chainEngine } = require('./engine/chainEngine');
 
+  logBus.on('log', (entry) => sendToRenderer('engine:log', entry));
   browserEngine.on('log', (entry) => sendToRenderer('engine:log', entry));
   browserEngine.on('captcha:detected', (data) => sendToRenderer('captcha:detected', data));
   browserEngine.on('captcha:resolved', (data) => sendToRenderer('captcha:resolved', data));

@@ -204,6 +204,27 @@ app.get('/api/engine/timing-logs', (req, res) => {
   }
 });
 
+const { logBus } = require('./src/main/engine/logBus');
+
+app.get('/api/engine/recent-logs', (req, res) => {
+  try {
+    const limit = req.query.limit ? Number(req.query.limit) : 200;
+    const category = req.query.category || null;
+    res.json(logBus.getRecentLogs({ limit, category }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/engine/clear-logs', (_req, res) => {
+  try {
+    logBus.clear();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/engine/quality-reviews', (req, res) => {
   try {
     const runId = req.query.runId ? Number(req.query.runId) : null;
