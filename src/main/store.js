@@ -2,7 +2,8 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { app } = require('electron');
+const electron = (process.versions && process.versions.electron) ? require('electron') : null;
+const app = electron?.app;
 
 const DEFAULTS = {
   theme: 'dark',
@@ -16,7 +17,13 @@ let cache = null;
 let saveTimer = null;
 
 function settingsFile() {
-  return path.join(app.getPath('userData'), 'settings.json');
+  const dir = (app && typeof app.getPath === 'function')
+    ? app.getPath('userData')
+    : path.join(process.cwd(), '.nrd');
+  if (!fs.existsSync(dir)) {
+    try { fs.mkdirSync(dir, { recursive: true }); } catch {}
+  }
+  return path.join(dir, 'settings.json');
 }
 
 function load() {

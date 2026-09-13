@@ -35,9 +35,11 @@ function getDbPath() {
   let userDataDir = null;
 
   try {
-    const { app } = require('electron');
-    if (app && typeof app.getPath === 'function') {
-      userDataDir = app.getPath('userData');
+    if (process.versions && process.versions.electron) {
+      const { app } = require('electron');
+      if (app && typeof app.getPath === 'function') {
+        userDataDir = app.getPath('userData');
+      }
     }
   } catch {
     // Running outside Electron (e.g. unit tests, dev server)

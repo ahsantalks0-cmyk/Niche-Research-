@@ -44,9 +44,11 @@ class BrowserEngine extends EventEmitter {
 
   initPaths() {
     try {
-      const { app } = require('electron');
-      if (app && typeof app.getPath === 'function') {
-        this.userDataDir = app.getPath('userData');
+      if (process.versions && process.versions.electron) {
+        const { app } = require('electron');
+        if (app && typeof app.getPath === 'function') {
+          this.userDataDir = app.getPath('userData');
+        }
       }
     } catch {
       // Running outside Electron

@@ -242,6 +242,73 @@ app.post('/api/db/crud/:action', (req, res) => {
   }
 });
 
+// LLM API routes (P1.3c/d)
+const llmClient = require('./src/main/llm/llmClient');
+const systemTests = require('./src/main/engine/systemTests');
+
+app.get('/api/llm/providers', (_req, res) => {
+  try {
+    res.json(llmClient.listProviders());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/llm/fetch-models', async (req, res) => {
+  try {
+    const { providerId, apiKey } = req.body || {};
+    const result = await llmClient.fetchModels(providerId, apiKey);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message, providerMessage: err.message });
+  }
+});
+
+app.post('/api/llm/validate-model', async (req, res) => {
+  try {
+    const result = await llmClient.validateModel(req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, success: false, error: err.message, providerMessage: err.message });
+  }
+});
+
+app.post('/api/llm/chat', async (req, res) => {
+  try {
+    const result = await llmClient.chat(req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ ok: false, success: false, error: err.message, providerMessage: err.message });
+  }
+});
+
+app.get('/api/llm/check-model-status', async (_req, res) => {
+  try {
+    const result = await llmClient.checkSelectedModelStatus();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ valid: false, warning: err.message });
+  }
+});
+
+app.get('/api/engine/system-tests', (_req, res) => {
+  try {
+    res.json(systemTests.listSystemTests());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/engine/system-tests/run', async (req, res) => {
+  try {
+    const { fileName } = req.body || {};
+    const result = await systemTests.runSystemTest(fileName);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ passed: false, error: err.message });
+  }
+});
+
 // Mount the renderer assets directly on / so index.html dependencies like 'styles/atelier.css' resolve properly
 app.use(express.static(path.join(__dirname, 'src/renderer')));
 

@@ -1,37 +1,42 @@
 'use strict';
 
 /**
- * NRD · llmProviders.js — Multi-Provider LLM Registry & Adapters (P1.3c)
+ * NRD · llmProviders.js — Multi-Provider LLM Registry & Adapters (P1.3c/d)
  * Supported Providers: Google Gemini, OpenAI, Anthropic, Groq.
- * 
+ *
  * STRICT HONESTY RULE: Every model returned comes strictly from a LIVE API call.
  * No hardcoded model lists presented as current, no fake models.
+ * All HTTP requests route through the main process httpClient (net.fetch + fallbacks).
  */
+
+const httpClient = require('./httpClient');
 
 const PROVIDERS = {
   gemini: {
     id: 'gemini',
     name: 'Google Gemini',
     description: 'Generative AI models by Google DeepMind (Flash models eligible for free tier).',
-    
+
     async fetchModels(apiKey) {
       if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
-        throw new Error('Gemini API key is required');
+        return {
+          ok: false,
+          status: 400,
+          providerMessage: 'Gemini API key is required',
+          errorCode: 'MISSING_API_KEY',
+          hint: 'Key ghalat hai — provider dashboard se sahi key copy karein',
+          error: 'Gemini API key is required',
+        };
       }
+
       const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}`;
-      const res = await fetch(url);
+      const res = await httpClient.request(url, { method: 'GET' }, { provider: 'Google Gemini', providerId: 'gemini' });
+
       if (!res.ok) {
-        let errText = '';
-        try {
-          const json = await res.json();
-          errText = json?.error?.message || res.statusText;
-        } catch {
-          errText = res.statusText;
-        }
-        throw new Error(`Google Gemini API error (${res.status}): ${errText}`);
+        return res;
       }
-      const data = await res.json();
-      const rawModels = data?.models || [];
+
+      const rawModels = res.data?.models || [];
       const chatModels = rawModels
         .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
         .map((m) => {
@@ -49,9 +54,21 @@ const PROVIDERS = {
         .sort((a, b) => a.id.localeCompare(b.id));
 
       if (chatModels.length === 0) {
-        throw new Error('Gemini API returned zero generateContent models.');
+        return {
+          ok: false,
+          status: 200,
+          providerMessage: 'Gemini API returned zero generateContent models.',
+          errorCode: 'NO_MODELS',
+          hint: 'API account credentials ya permissions check karein.',
+          error: 'Gemini API returned zero generateContent models.',
+        };
       }
-      return chatModels;
+
+      return {
+        ok: true,
+        status: 200,
+        models: chatModels,
+      };
     },
 
     buildChatRequest(modelId, messages, options = {}) {
@@ -99,26 +116,34 @@ const PROVIDERS = {
     id: 'openai',
     name: 'OpenAI',
     description: 'GPT-4o, GPT-4, and reasoning models by OpenAI.',
-    
+
     async fetchModels(apiKey) {
       if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
-        throw new Error('OpenAI API key is required');
+        return {
+          ok: false,
+          status: 400,
+          providerMessage: 'OpenAI API key is required',
+          errorCode: 'MISSING_API_KEY',
+          hint: 'Key ghalat hai — provider dashboard se sahi key copy karein',
+          error: 'OpenAI API key is required',
+        };
       }
-      const res = await fetch('https://api.openai.com/v1/models', {
-        headers: { Authorization: `Bearer ${apiKey.trim()}` },
-      });
+
+      const url = 'https://api.openai.com/v1/models';
+      const res = await httpClient.request(
+        url,
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${apiKey.trim()}` },
+        },
+        { provider: 'OpenAI', providerId: 'openai' }
+      );
+
       if (!res.ok) {
-        let errText = '';
-        try {
-          const json = await res.json();
-          errText = json?.error?.message || res.statusText;
-        } catch {
-          errText = res.statusText;
-        }
-        throw new Error(`OpenAI API error (${res.status}): ${errText}`);
+        return res;
       }
-      const data = await res.json();
-      const rawModels = data?.data || [];
+
+      const rawModels = res.data?.data || [];
       const chatModels = rawModels
         .filter((m) => {
           const id = (m.id || '').toLowerCase();
@@ -135,9 +160,21 @@ const PROVIDERS = {
         .sort((a, b) => a.id.localeCompare(b.id));
 
       if (chatModels.length === 0) {
-        throw new Error('OpenAI API returned zero chat-compatible models.');
+        return {
+          ok: false,
+          status: 200,
+          providerMessage: 'OpenAI API returned zero chat-compatible models.',
+          errorCode: 'NO_MODELS',
+          hint: 'OpenAI account dashboard mein models access check karein.',
+          error: 'OpenAI API returned zero chat-compatible models.',
+        };
       }
-      return chatModels;
+
+      return {
+        ok: true,
+        status: 200,
+        models: chatModels,
+      };
     },
 
     buildChatRequest(modelId, messages, options = {}) {
@@ -176,29 +213,37 @@ const PROVIDERS = {
     id: 'anthropic',
     name: 'Anthropic',
     description: 'Claude 3.5 Sonnet, Claude 3 Opus, and Haiku models by Anthropic.',
-    
+
     async fetchModels(apiKey) {
       if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
-        throw new Error('Anthropic API key is required');
+        return {
+          ok: false,
+          status: 400,
+          providerMessage: 'Anthropic API key is required',
+          errorCode: 'MISSING_API_KEY',
+          hint: 'Key ghalat hai — provider dashboard se sahi key copy karein',
+          error: 'Anthropic API key is required',
+        };
       }
-      const res = await fetch('https://api.anthropic.com/v1/models', {
-        headers: {
-          'x-api-key': apiKey.trim(),
-          'anthropic-version': '2023-06-01',
+
+      const url = 'https://api.anthropic.com/v1/models';
+      const res = await httpClient.request(
+        url,
+        {
+          method: 'GET',
+          headers: {
+            'x-api-key': apiKey.trim(),
+            'anthropic-version': '2023-06-01',
+          },
         },
-      });
+        { provider: 'Anthropic', providerId: 'anthropic' }
+      );
+
       if (!res.ok) {
-        let errText = '';
-        try {
-          const json = await res.json();
-          errText = json?.error?.message || res.statusText;
-        } catch {
-          errText = res.statusText;
-        }
-        throw new Error(`Anthropic API error (${res.status}): ${errText}`);
+        return res;
       }
-      const data = await res.json();
-      const rawModels = data?.data || [];
+
+      const rawModels = res.data?.data || [];
       const chatModels = rawModels
         .filter((m) => (m.id || '').toLowerCase().includes('claude'))
         .map((m) => ({
@@ -212,9 +257,21 @@ const PROVIDERS = {
         .sort((a, b) => a.id.localeCompare(b.id));
 
       if (chatModels.length === 0) {
-        throw new Error('Anthropic API returned zero Claude models.');
+        return {
+          ok: false,
+          status: 200,
+          providerMessage: 'Anthropic API returned zero Claude models.',
+          errorCode: 'NO_MODELS',
+          hint: 'Anthropic console mein model access check karein.',
+          error: 'Anthropic API returned zero Claude models.',
+        };
       }
-      return chatModels;
+
+      return {
+        ok: true,
+        status: 200,
+        models: chatModels,
+      };
     },
 
     buildChatRequest(modelId, messages, options = {}) {
@@ -261,26 +318,34 @@ const PROVIDERS = {
     id: 'groq',
     name: 'Groq',
     description: 'Ultra-fast LLaMA, Mixtral, and Gemma inference powered by Groq LPU.',
-    
+
     async fetchModels(apiKey) {
       if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
-        throw new Error('Groq API key is required');
+        return {
+          ok: false,
+          status: 400,
+          providerMessage: 'Groq API key is required',
+          errorCode: 'MISSING_API_KEY',
+          hint: 'Key ghalat hai — provider dashboard se sahi key copy karein',
+          error: 'Groq API key is required',
+        };
       }
-      const res = await fetch('https://api.groq.com/openai/v1/models', {
-        headers: { Authorization: `Bearer ${apiKey.trim()}` },
-      });
+
+      const url = 'https://api.groq.com/openai/v1/models';
+      const res = await httpClient.request(
+        url,
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${apiKey.trim()}` },
+        },
+        { provider: 'Groq', providerId: 'groq' }
+      );
+
       if (!res.ok) {
-        let errText = '';
-        try {
-          const json = await res.json();
-          errText = json?.error?.message || res.statusText;
-        } catch {
-          errText = res.statusText;
-        }
-        throw new Error(`Groq API error (${res.status}): ${errText}`);
+        return res;
       }
-      const data = await res.json();
-      const rawModels = data?.data || [];
+
+      const rawModels = res.data?.data || [];
       const chatModels = rawModels
         .filter((m) => {
           const id = (m.id || '').toLowerCase();
@@ -297,9 +362,21 @@ const PROVIDERS = {
         .sort((a, b) => a.id.localeCompare(b.id));
 
       if (chatModels.length === 0) {
-        throw new Error('Groq API returned zero chat models.');
+        return {
+          ok: false,
+          status: 200,
+          providerMessage: 'Groq API returned zero chat models.',
+          errorCode: 'NO_MODELS',
+          hint: 'Groq console mein model access check karein.',
+          error: 'Groq API returned zero chat models.',
+        };
       }
-      return chatModels;
+
+      return {
+        ok: true,
+        status: 200,
+        models: chatModels,
+      };
     },
 
     buildChatRequest(modelId, messages, options = {}) {

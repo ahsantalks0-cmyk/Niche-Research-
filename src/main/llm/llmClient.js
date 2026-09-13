@@ -1,12 +1,14 @@
 'use strict';
 
 /**
- * NRD · llmClient.js — Unified LLM Client Interface (P1.3c)
+ * NRD · llmClient.js — Unified LLM Client Interface (P1.3c/d)
  * Standardized client routing across Google Gemini, OpenAI, Anthropic, and Groq.
+ * All HTTP calls execute in the Main Process via httpClient (net.fetch + fallbacks).
  */
 
 const db = require('../db');
 const { getProvider, listProviders } = require('./llmProviders');
+const httpClient = require('./httpClient');
 
 let activeRefreshInterval = null;
 
@@ -35,7 +37,7 @@ function getActiveConfig() {
 
   const providerId = settings.ai_provider || 'gemini';
   const modelId = settings.ai_model || (providerId === 'gemini' ? 'gemini-2.5-flash' : null);
-  
+
   // API key search order: per-provider setting -> environment -> gemini_api_key setting
   let apiKey = settings[`ai_key_${providerId}`] || null;
   if (!apiKey) {
@@ -50,17 +52,29 @@ function getActiveConfig() {
 
 /**
  * Fetches live chat models from provider API and updates local DB cache.
+ * Returns structured result:
+ * { ok: boolean, status: number, models?: Array, providerMessage?: string, errorCode?: string, hint?: string, error?: string }
  * @param {string} providerId
  * @param {string} apiKey
- * @returns {Promise<Array<{ id: string, name: string, isFreeTier: boolean, isPaid: boolean, tierLabel: string }>>}
+ * @returns {Promise<{ ok: boolean, status: number, models?: Array, providerMessage?: string, errorCode?: string, hint?: string, error?: string }>}
  */
 async function fetchModels(providerId, apiKey) {
   const provider = getProvider(providerId);
   if (!provider) {
-    throw new Error(`Unknown provider: ${providerId}`);
+    return {
+      ok: false,
+      status: 400,
+      providerMessage: `Unknown provider '${providerId}'`,
+      errorCode: 'UNKNOWN_PROVIDER',
+      hint: 'Supported providers: Google Gemini, OpenAI, Anthropic, Groq.',
+      error: `Unknown provider '${providerId}'`,
+    };
   }
 
-  const models = await provider.fetchModels(apiKey);
+  const result = await provider.fetchModels(apiKey);
+  if (!result.ok) {
+    return result;
+  }
 
   // Update DB cache
   try {
@@ -74,18 +88,18 @@ async function fetchModels(providerId, apiKey) {
 
     cache[providerId] = {
       fetchedAt: new Date().toISOString(),
-      models,
+      models: result.models,
     };
 
     db.saveSettings({
       models_cache_json: JSON.stringify(cache),
       models_cache_fetched_at: new Date().toISOString(),
     });
-  } catch (err) {
+  } catch {
     // Non-fatal cache write failure
   }
 
-  return models;
+  return result;
 }
 
 /**
@@ -94,57 +108,46 @@ async function fetchModels(providerId, apiKey) {
  * @param {string} params.providerId
  * @param {string} params.modelId
  * @param {string} params.apiKey
- * @returns {Promise<{ success: boolean, error?: string, isBillingError?: boolean }>}
+ * @returns {Promise<{ ok: boolean, success: boolean, status?: number, providerMessage?: string, errorCode?: string, hint?: string, isBillingError?: boolean, error?: string }>}
  */
 async function validateModel({ providerId, modelId, apiKey }) {
   if (!providerId || !modelId || !apiKey) {
-    return { success: false, error: 'Provider, model, and API key are required' };
-  }
-
-  const provider = getProvider(providerId);
-  if (!provider) {
-    return { success: false, error: `Unknown provider '${providerId}'` };
-  }
-
-  try {
-    const res = await chat({
-      providerId,
-      modelId,
-      apiKey,
-      messages: [{ role: 'user', content: 'Reply with: OK' }],
-      maxTokens: 10,
-    });
-
-    if (res.success) {
-      return { success: true };
-    } else {
-      const errStr = (res.error || '').toLowerCase();
-      const isBilling = errStr.includes('402') ||
-        errStr.includes('403') ||
-        errStr.includes('insufficient_quota') ||
-        errStr.includes('credit_balance') ||
-        errStr.includes('billing') ||
-        errStr.includes('quota');
-
-      return {
-        success: false,
-        error: res.error || 'Validation request failed',
-        isBillingError: isBilling,
-      };
-    }
-  } catch (err) {
-    const errStr = (err.message || '').toLowerCase();
-    const isBilling = errStr.includes('402') ||
-      errStr.includes('403') ||
-      errStr.includes('insufficient_quota') ||
-      errStr.includes('credit_balance') ||
-      errStr.includes('billing') ||
-      errStr.includes('quota');
-
     return {
+      ok: false,
       success: false,
-      error: err.message,
-      isBillingError: isBilling,
+      status: 400,
+      providerMessage: 'Provider, model, and API key are required for validation',
+      errorCode: 'MISSING_PARAMS',
+      hint: 'Please provide valid Provider, Model, and API Key.',
+      error: 'Provider, model, and API key are required for validation',
+    };
+  }
+
+  const res = await chat({
+    providerId,
+    modelId,
+    apiKey,
+    messages: [{ role: 'user', content: 'Reply with: OK' }],
+    maxTokens: 10,
+  });
+
+  if (res.success) {
+    return {
+      ok: true,
+      success: true,
+      status: 200,
+      providerMessage: 'Validation succeeded',
+    };
+  } else {
+    return {
+      ok: false,
+      success: false,
+      status: res.status,
+      providerMessage: res.providerMessage || res.error,
+      errorCode: res.errorCode,
+      hint: res.hint,
+      isBillingError: !!res.isBillingError,
+      error: res.error || res.providerMessage,
     };
   }
 }
@@ -153,7 +156,7 @@ async function validateModel({ providerId, modelId, apiKey }) {
  * Main LLM chat completion entry point.
  * Options: { messages, temperature?, maxTokens?, jsonMode?, providerId?, modelId?, apiKey? }
  * @param {object} options
- * @returns {Promise<{ success: boolean, content: string|null, error?: string, isConfigured: boolean, usage?: object, latencyMs?: number, provider?: string, model?: string }>}
+ * @returns {Promise<{ ok: boolean, success: boolean, content: string|null, error?: string, providerMessage?: string, errorCode?: string, hint?: string, isBillingError?: boolean, isConfigured: boolean, usage?: object, latencyMs?: number, provider?: string, model?: string }>}
  */
 async function chat(options = {}) {
   const activeCfg = getActiveConfig();
@@ -163,9 +166,13 @@ async function chat(options = {}) {
 
   if (!providerId || !modelId || !apiKey) {
     return {
+      ok: false,
       success: false,
       content: null,
       error: 'AI not configured',
+      providerMessage: 'AI not configured — please configure an API key in Settings',
+      errorCode: 'NOT_CONFIGURED',
+      hint: 'Settings → AI Provider mein ja kar key configure karein.',
       isConfigured: false,
     };
   }
@@ -173,9 +180,13 @@ async function chat(options = {}) {
   const provider = getProvider(providerId);
   if (!provider) {
     return {
+      ok: false,
       success: false,
       content: null,
       error: `Provider '${providerId}' is not registered`,
+      providerMessage: `Provider '${providerId}' is not registered`,
+      errorCode: 'UNKNOWN_PROVIDER',
+      hint: 'Supported providers: Google Gemini, OpenAI, Anthropic, Groq.',
       isConfigured: true,
     };
   }
@@ -196,47 +207,48 @@ async function chat(options = {}) {
   const t0 = Date.now();
   const logger = getBrowserEngine();
 
-  try {
-    const res = await fetch(fetchUrl, {
+  const res = await httpClient.request(
+    fetchUrl,
+    {
       method: 'POST',
       headers: reqSpec.headers,
       body: JSON.stringify(reqSpec.body),
-    });
+    },
+    { provider: provider.name, providerId, modelId }
+  );
 
-    const latencyMs = Date.now() - t0;
+  const latencyMs = Date.now() - t0;
 
-    if (!res.ok) {
-      let errText = '';
-      try {
-        const json = await res.json();
-        errText = json?.error?.message || json?.message || res.statusText;
-      } catch {
-        errText = res.statusText;
-      }
+  if (!res.ok) {
+    const errTextLower = (res.providerMessage || '').toLowerCase();
+    const isBilling = (
+      res.status === 402 ||
+      res.status === 429 ||
+      (res.status === 403 && errTextLower.includes('billing')) ||
+      errTextLower.includes('insufficient_quota') ||
+      errTextLower.includes('quota') ||
+      errTextLower.includes('credit_balance')
+    );
 
-      const errorMsg = `HTTP ${res.status} from ${provider.name} (${modelId}): ${errText}`;
-      logger.log('info', `[LLM] Call to ${providerId}/${modelId} FAILED (${latencyMs}ms): ${errorMsg}`, {
-        category: 'LLM',
-        provider: providerId,
-        model: modelId,
-        latencyMs,
-        error: errorMsg,
-      });
+    return {
+      ok: false,
+      success: false,
+      content: null,
+      status: res.status,
+      providerMessage: res.providerMessage,
+      errorCode: res.errorCode,
+      hint: res.hint,
+      isBillingError: isBilling,
+      error: res.error || res.providerMessage,
+      isConfigured: true,
+      provider: providerId,
+      model: modelId,
+      latencyMs,
+    };
+  }
 
-      return {
-        success: false,
-        content: null,
-        error: errorMsg,
-        isConfigured: true,
-        provider: providerId,
-        model: modelId,
-        latencyMs,
-      };
-    }
-
-    const json = await res.json();
-    const parsed = provider.parseChatResponse(json);
-
+  try {
+    const parsed = provider.parseChatResponse(res.data);
     logger.log('info', `[LLM] ${provider.name} (${modelId}) responded in ${latencyMs}ms (${parsed.usage?.totalTokens || 0} tokens)`, {
       category: 'LLM',
       provider: providerId,
@@ -246,29 +258,27 @@ async function chat(options = {}) {
     });
 
     return {
+      ok: true,
       success: true,
       content: parsed.text,
       error: null,
+      providerMessage: null,
       isConfigured: true,
       usage: parsed.usage,
       latencyMs,
       provider: providerId,
       model: modelId,
     };
-  } catch (err) {
-    const latencyMs = Date.now() - t0;
-    logger.log('info', `[LLM] Network exception calling ${providerId}/${modelId} (${latencyMs}ms): ${err.message}`, {
-      category: 'LLM',
-      provider: providerId,
-      model: modelId,
-      latencyMs,
-      error: err.message,
-    });
-
+  } catch (parseErr) {
     return {
+      ok: false,
       success: false,
       content: null,
-      error: `Network error: ${err.message}`,
+      status: 200,
+      providerMessage: `Failed to parse model response: ${parseErr.message}`,
+      errorCode: 'PARSE_ERROR',
+      hint: 'Provider returned an invalid JSON or empty response format.',
+      error: parseErr.message,
       isConfigured: true,
       provider: providerId,
       model: modelId,
@@ -318,7 +328,7 @@ async function checkSelectedModelStatus() {
  */
 function initAutoRefresh() {
   if (activeRefreshInterval) return;
-  
+
   const refresh = async () => {
     const cfg = getActiveConfig();
     if (cfg.providerId && cfg.apiKey) {

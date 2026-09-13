@@ -516,6 +516,43 @@
         aiProviderSelect.addEventListener('change', onProviderChanged);
       }
 
+      const escapeHtml = (str) => {
+        if (typeof str !== 'string') return String(str || '');
+        return str
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      };
+
+      const renderAiErrorBox = (targetEl, errObj) => {
+        targetEl.style.display = '';
+        targetEl.style.background = 'rgba(239, 68, 68, 0.12)';
+        targetEl.style.border = '1px solid rgba(239, 68, 68, 0.35)';
+        targetEl.style.borderRadius = '8px';
+        targetEl.style.padding = '12px 14px';
+        targetEl.style.marginTop = '12px';
+
+        const providerMsg = errObj.providerMessage || errObj.message || errObj.error || 'Connection failure';
+        const hint = errObj.hint || 'Provider dashboard se sahi key aur permissions verify karein.';
+        const code = errObj.errorCode || (errObj.status ? `HTTP ${errObj.status}` : 'ERR');
+
+        targetEl.innerHTML = `
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px;">
+            <div style="font-weight:600;color:#f87171;font-size:13px;line-height:1.4;">
+              ❌ ${escapeHtml(providerMsg)}
+            </div>
+            <span style="font-size:11px;padding:2px 6px;border-radius:4px;background:rgba(239, 68, 68, 0.2);color:#fca5a5;font-family:monospace;white-space:nowrap;">
+              ${escapeHtml(code)}
+            </span>
+          </div>
+          <div style="color:var(--text-muted, #94a3b8);font-size:12px;line-height:1.4;margin-top:4px;">
+            💡 <strong>Hint:</strong> ${escapeHtml(hint)}
+          </div>
+        `;
+      };
+
       // Test Connection & Fetch Models
       if (btnTestProvider) {
         btnTestProvider.addEventListener('click', async () => {
@@ -534,13 +571,19 @@
           try {
             if (!window.llmAPI) throw new Error('llmAPI unavailable in preview mode.');
             const res = await window.llmAPI.fetchModels(pId, key);
-            if (!res.success) {
-              throw new Error(res.error || 'Failed to fetch models');
+            if (!res.ok) {
+              renderAiErrorBox(aiErrorBox, res);
+              NRDToast.show({
+                type: 'error',
+                title: 'Connection Failed',
+                msg: res.providerMessage || res.error || 'Failed to fetch models',
+              });
+              return;
             }
 
             currentFetchedModels = res.models || [];
             aiModelSelect.innerHTML = currentFetchedModels.map((m) => {
-              const freeBadge = m.freeTier ? ' [FREE TIER]' : ' [PAID]';
+              const freeBadge = m.isFreeTier ? ' [FREE TIER]' : ' [PAID]';
               return `<option value="${m.id}">${m.name} (${m.id})${freeBadge}</option>`;
             }).join('');
 
@@ -549,12 +592,16 @@
               aiModelSelect.value = savedSettings.aiModel;
             }
 
+            aiErrorBox.style.display = 'none';
             aiModelContainer.style.display = '';
             setApiKeyFieldForProvider(pId, key);
             NRDToast.show({ type: 'success', title: 'Models Fetched', msg: `Found ${currentFetchedModels.length} models from live API call.` });
           } catch (err) {
-            aiErrorBox.style.display = '';
-            aiErrorBox.innerHTML = `<strong>Fetch Error:</strong> ${err.message}`;
+            renderAiErrorBox(aiErrorBox, {
+              providerMessage: err.message,
+              errorCode: 'IPC_ERROR',
+              hint: 'Check that Electron main process and background services are running.',
+            });
             NRDToast.show({ type: 'error', title: 'Provider Error', msg: err.message });
           } finally {
             btnTestProvider.disabled = false;
@@ -591,12 +638,19 @@
             await window.dbAPI.saveSettings(patch);
             savedSettings = { ...savedSettings, ...patch };
 
-            if (!valRes.valid) {
+            if (!valRes.ok && !valRes.success) {
               aiStatusBadge.style.display = '';
-              aiStatusBadge.style.background = 'rgba(245, 158, 11, 0.15)';
-              aiStatusBadge.style.border = '1px solid rgba(245, 158, 11, 0.4)';
-              aiStatusBadge.style.color = '#f59e0b';
-              aiStatusBadge.innerHTML = `⚠️ <strong>Model Warning:</strong> ${valRes.error}. Billing setup required or select a free-tier model.`;
+              if (valRes.isBillingError) {
+                aiStatusBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+                aiStatusBadge.style.border = '1px solid rgba(245, 158, 11, 0.4)';
+                aiStatusBadge.style.color = '#f59e0b';
+                aiStatusBadge.innerHTML = `⚠️ <strong>Model Warning (${valRes.errorCode || valRes.status}):</strong> ${escapeHtml(valRes.providerMessage || valRes.error)}<br><span style="font-size:11.5px;opacity:0.9;">💡 ${escapeHtml(valRes.hint || 'Billing setup required or switch to a free-tier model.')}</span>`;
+              } else {
+                aiStatusBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+                aiStatusBadge.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+                aiStatusBadge.style.color = '#f87171';
+                aiStatusBadge.innerHTML = `❌ <strong>Validation Error (${valRes.errorCode || valRes.status}):</strong> ${escapeHtml(valRes.providerMessage || valRes.error)}<br><span style="font-size:11.5px;opacity:0.9;">💡 ${escapeHtml(valRes.hint || 'Check provider API credentials.')}</span>`;
+              }
             } else {
               aiStatusBadge.style.display = '';
               aiStatusBadge.style.background = 'rgba(34, 197, 94, 0.15)';
@@ -620,6 +674,10 @@
       if (btnSendAiTest) {
         btnSendAiTest.addEventListener('click', async () => {
           const prompt = aiTestInput.value.trim() || 'Hello, specify your model name and status.';
+          const pId = aiProviderSelect.value;
+          const modelId = aiModelSelect.value;
+          const key = aiProviderKey.value.trim();
+
           btnSendAiTest.disabled = true;
           aiTestOutput.style.display = '';
           aiTestOutput.textContent = 'Sending prompt to AI model…';
@@ -627,13 +685,22 @@
           try {
             if (!window.llmAPI) throw new Error('llmAPI unavailable');
             const res = await window.llmAPI.chat({
+              providerId: pId,
+              modelId: modelId,
+              apiKey: key,
               messages: [{ role: 'user', content: prompt }],
               temperature: 0.3,
               maxTokens: 150,
             });
 
-            if (!res.success) throw new Error(res.error || 'Chat failed');
-            aiTestOutput.textContent = `[${res.modelId}] Response (${res.latencyMs}ms, ${res.usage?.totalTokens || 0} tokens):\n${res.content}`;
+            if (!res.ok && !res.success) {
+              aiTestOutput.innerHTML = `
+                <div style="color:#f87171;font-weight:600;margin-bottom:4px;">❌ Error (${res.status || res.errorCode}): ${escapeHtml(res.providerMessage || res.error)}</div>
+                <div style="color:var(--text-muted, #94a3b8);font-size:12px;">💡 Hint: ${escapeHtml(res.hint || 'Check your key and connection.')}</div>
+              `;
+            } else {
+              aiTestOutput.textContent = `[${res.model || modelId}] Response (${res.latencyMs}ms, ${res.usage?.totalTokens || 0} tokens):\n${res.content}`;
+            }
           } catch (err) {
             aiTestOutput.textContent = `Error: ${err.message}`;
           } finally {

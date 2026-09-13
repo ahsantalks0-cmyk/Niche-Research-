@@ -5,7 +5,8 @@
  * Registers ipcMain.handle listeners for database queries and transactions.
  */
 
-const { ipcMain } = require('electron');
+const electron = (process.versions && process.versions.electron) ? require('electron') : null;
+const ipcMain = electron?.ipcMain || { handle: () => {}, on: () => {} };
 const db = require('./db');
 
 /**

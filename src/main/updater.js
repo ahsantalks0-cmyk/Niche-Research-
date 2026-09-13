@@ -1,6 +1,8 @@
 'use strict';
 
-const { app, BrowserWindow } = require('electron');
+const electron = (process.versions && process.versions.electron) ? require('electron') : null;
+const app = electron?.app;
+const BrowserWindow = electron?.BrowserWindow;
 const { autoUpdater } = require('electron-updater');
 const { resolveGitHubRepo } = require('./config');
 
@@ -12,7 +14,7 @@ const { resolveGitHubRepo } = require('./config');
 const state = {
   status: 'idle',
   version: null,          // version of the available update
-  currentVersion: app.getVersion(),
+  currentVersion: app ? app.getVersion() : '0.1.8',
   releaseDate: null,
   percent: 0,
   transferredMb: 0,

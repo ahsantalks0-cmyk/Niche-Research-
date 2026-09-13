@@ -301,6 +301,27 @@
           message: `Browser Engine Test [${testName}] passed with real Chrome profile verification.`,
         };
       },
+      listSystemTests: async () => {
+        try {
+          const res = await fetch('/api/engine/system-tests');
+          return await res.json();
+        } catch {
+          return [];
+        }
+      },
+      runSystemTest: async (fileName) => {
+        const res = await fetch('/api/engine/system-tests/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName }),
+        });
+        return await res.json();
+      },
+      onSystemTestLog: (cb) => {
+        engineListeners.systemTestLog = engineListeners.systemTestLog || [];
+        engineListeners.systemTestLog.push(cb);
+        return () => {};
+      },
       onLog: (cb) => { engineListeners.log.push(cb); return () => {}; },
       onCaptchaDetected: (cb) => { engineListeners.captchaDetected.push(cb); return () => {}; },
       onCaptchaResolved: (cb) => { engineListeners.captchaResolved.push(cb); return () => {}; },
@@ -308,6 +329,43 @@
       onRateLimiterWait: (cb) => { engineListeners.rateLimiterWait.push(cb); return () => {}; },
       onRunStatus: (cb) => { engineListeners.runStatus.push(cb); return () => {}; },
       onAgentStatus: (cb) => { engineListeners.agentStatus.push(cb); return () => {}; },
+    };
+  }
+
+  if (!window.llmAPI) {
+    window.llmAPI = {
+      listProviders: async () => {
+        const res = await fetch('/api/llm/providers');
+        return await res.json();
+      },
+      fetchModels: async (providerId, apiKey) => {
+        const res = await fetch('/api/llm/fetch-models', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ providerId, apiKey }),
+        });
+        return await res.json();
+      },
+      validateModel: async (params) => {
+        const res = await fetch('/api/llm/validate-model', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params),
+        });
+        return await res.json();
+      },
+      chat: async (options) => {
+        const res = await fetch('/api/llm/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(options),
+        });
+        return await res.json();
+      },
+      checkModelStatus: async () => {
+        const res = await fetch('/api/llm/check-model-status');
+        return await res.json();
+      },
     };
   }
 })();
