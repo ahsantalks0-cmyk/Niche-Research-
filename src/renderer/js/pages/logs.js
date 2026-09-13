@@ -57,9 +57,10 @@
   }
 
   async function loadHistoricalLogs() {
+    logEntries = [];
     if (window.engineAPI && window.engineAPI.getRecentLogs) {
       try {
-        const recent = await window.engineAPI.getRecentLogs({ limit: 200 });
+        const recent = await window.engineAPI.getRecentLogs({ limit: 500 });
         if (Array.isArray(recent) && recent.length > 0) {
           recent.forEach((e) => {
             logEntries.push({
@@ -130,7 +131,7 @@
     }
 
     const countEl = document.getElementById('logs-count-label');
-    if (countEl) countEl.textContent = `${filtered.length} / ${logEntries.length} events`;
+    if (countEl) countEl.textContent = `${filtered.length} / ${logEntries.length} EVENTS`;
 
     if (filtered.length === 0) {
       container.innerHTML = `
@@ -262,16 +263,31 @@
 
       const clearBtn = document.getElementById('btn-page-clear');
       if (clearBtn) {
-        clearBtn.addEventListener('click', () => {
+        clearBtn.addEventListener('click', async () => {
           logEntries = [];
           renderLogs();
+          if (window.engineAPI && typeof window.engineAPI.clearLogs === 'function') {
+            try {
+              await window.engineAPI.clearLogs();
+            } catch (err) {
+              console.warn('[logs-page] Failed to clear persistent logs:', err);
+            }
+          }
         });
       }
 
       const exportBtn = document.getElementById('btn-page-export');
       if (exportBtn) {
-        exportBtn.addEventListener('click', () => {
-          const text = logEntries.map((e) => `[${e.timestamp}] [${e.type.toUpperCase()}] ${e.message}`).join('\n');
+        exportBtn.addEventListener('click', async () => {
+          let text = '';
+          if (window.engineAPI && typeof window.engineAPI.exportLogs === 'function') {
+            try {
+              text = await window.engineAPI.exportLogs();
+            } catch {}
+          }
+          if (!text) {
+            text = logEntries.map((e) => `[${e.timestamp}] [${(e.category || e.type).toUpperCase()}] ${e.message}`).join('\n');
+          }
           const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -282,12 +298,8 @@
         });
       }
 
-      // Load initial historical logs if empty
-      if (logEntries.length === 0) {
-        loadHistoricalLogs();
-      } else {
-        renderLogs();
-      }
+      // Always reload latest persistent logs from database on mount
+      loadHistoricalLogs();
 
       // Subscribe to real-time events
       if (window.engineAPI) {

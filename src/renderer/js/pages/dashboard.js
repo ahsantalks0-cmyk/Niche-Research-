@@ -74,6 +74,23 @@
         </div>`).join('');
 
       el.innerHTML = `
+        <div id="dash-model-warning-banner" style="display:none; margin-bottom:16px; padding:12px 18px; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.35); border-radius:8px; color:#fbbf24; font-size:13px; line-height:1.5;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px">
+            <div style="display:flex; align-items:center; gap:8px">
+              <span style="font-size:16px">⚠️</span>
+              <div>
+                <strong style="color:#f59e0b">Selected AI Model Unavailable:</strong>
+                <span id="dash-model-warning-text" style="color:var(--text-2, #d1d5db); margin-left:4px">
+                  Your chosen model is no longer available from the provider.
+                </span>
+              </div>
+            </div>
+            <button class="btn btn-sm btn-outline" data-goto="settings" style="border-color:rgba(245, 158, 11, 0.5); color:#fbbf24">
+              Update in Settings &rarr;
+            </button>
+          </div>
+        </div>
+
         <div class="page-head">
           <div>
             <h2>Morning briefing</h2>
@@ -206,6 +223,35 @@
         });
       } else {
         animateKpis(null);
+      }
+
+      // Check model validity for warning banner
+      const dashBanner = document.getElementById('dash-model-warning-banner');
+      const dashBannerText = document.getElementById('dash-model-warning-text');
+
+      const showDashWarning = (msg) => {
+        if (dashBanner) {
+          dashBanner.style.display = 'block';
+          if (dashBannerText) {
+            dashBannerText.textContent = msg || 'Your chosen model is no longer available from the provider. Please update your AI settings.';
+          }
+        }
+      };
+
+      if (window.dbAPI && typeof window.dbAPI.getSettings === 'function') {
+        window.dbAPI.getSettings().then((s) => {
+          if (s && (s.ai_model_invalid || s.aiModelInvalid)) {
+            showDashWarning(s.ai_model_invalid_reason || s.aiModelInvalidReason);
+          }
+        }).catch(() => {});
+      }
+
+      if (window.llmAPI && typeof window.llmAPI.checkModelStatus === 'function') {
+        window.llmAPI.checkModelStatus().then((status) => {
+          if (status && status.warning) {
+            showDashWarning(status.warning);
+          }
+        }).catch(() => {});
       }
 
       const labels14 = Array.from({ length: 14 }, (_, i) => {

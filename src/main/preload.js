@@ -104,9 +104,10 @@ contextBridge.exposeInMainWorld('engineAPI', {
   getTimingSummary: (runId) => ipcRenderer.invoke('engine:get-timing-summary', runId),
   getTimingLogs: (options) => ipcRenderer.invoke('engine:get-timing-logs', options),
 
-  /* Live Logs Bus (P1.3e) */
+  /* Live Logs Bus (P1.3e/f) */
   getRecentLogs: (options) => ipcRenderer.invoke('engine:get-recent-logs', options),
   clearLogs: () => ipcRenderer.invoke('engine:clear-logs'),
+  exportLogs: () => ipcRenderer.invoke('engine:export-logs'),
 
   /* Quality Supervisor (P1.3) */
   getQualityReviews: (runId, options) => ipcRenderer.invoke('engine:get-quality-reviews', runId, options),

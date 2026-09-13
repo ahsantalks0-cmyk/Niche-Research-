@@ -308,6 +308,15 @@
           return { success: false };
         }
       },
+      exportLogs: async () => {
+        try {
+          const res = await fetch('/api/engine/export-logs');
+          const data = await res.json();
+          return data.text || '';
+        } catch {
+          return '';
+        }
+      },
       runTest: async (testName) => {
         await new Promise((r) => setTimeout(r, 600));
         return {

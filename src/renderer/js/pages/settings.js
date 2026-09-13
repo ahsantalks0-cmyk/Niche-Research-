@@ -74,6 +74,15 @@
 
             <div class="panel panel-pad" id="panel-ai-provider">
               <div class="section-label">AI Provider &amp; Credentials (Multi-Provider AI System)</div>
+
+              <div id="settings-model-warning-banner" style="display:none; margin-bottom:14px; padding:12px 16px; background:rgba(245, 158, 11, 0.12); border:1px solid rgba(245, 158, 11, 0.35); border-radius:8px; color:#fbbf24; font-size:12.5px; line-height:1.5;">
+                <div style="display:flex; align-items:center; gap:8px; font-weight:600; margin-bottom:4px">
+                  <span>⚠️ Selected AI Model Unavailable</span>
+                </div>
+                <div id="settings-model-warning-text" style="color:var(--text-2, #d1d5db); font-size:12px">
+                  The previously selected model is no longer available from the provider. Please test connection and choose an active model below.
+                </div>
+              </div>
               
               <div class="set-row">
                 <div>
@@ -629,6 +638,10 @@
             const patch = {
               aiProvider: pId,
               aiModel: modelId,
+              aiModelInvalid: 0,
+              ai_model_invalid: 0,
+              aiModelInvalidReason: '',
+              ai_model_invalid_reason: '',
               geminiApiKey: savedSettings.geminiApiKey || '',
               openaiApiKey: savedSettings.openaiApiKey || '',
               anthropicApiKey: savedSettings.anthropicApiKey || '',
@@ -637,6 +650,9 @@
 
             await window.dbAPI.saveSettings(patch);
             savedSettings = { ...savedSettings, ...patch };
+
+            const modelWarnBanner = document.getElementById('settings-model-warning-banner');
+            if (modelWarnBanner) modelWarnBanner.style.display = 'none';
 
             if (!valRes.ok && !valRes.success) {
               aiStatusBadge.style.display = '';
@@ -759,18 +775,36 @@
           }
 
           // Check model status for warning banner if model unavailable
+          const bannerEl = document.getElementById('settings-model-warning-banner');
+          const bannerTextEl = document.getElementById('settings-model-warning-text');
+
+          const showWarning = (warnMsg) => {
+            if (bannerEl) {
+              bannerEl.style.display = 'block';
+              if (bannerTextEl) {
+                bannerTextEl.textContent = warnMsg || 'Your selected model is no longer available. Please test connection and select an active model.';
+              }
+            }
+            if (aiStatusBadge) {
+              aiStatusBadge.style.display = '';
+              aiStatusBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+              aiStatusBadge.style.border = '1px solid rgba(245, 158, 11, 0.4)';
+              aiStatusBadge.style.color = '#fbbf24';
+              aiStatusBadge.innerHTML = `⚠️ <strong>Model Warning:</strong> ${escapeHtml(warnMsg)}`;
+            }
+          };
+
+          if (dbSet.aiModelInvalid || dbSet.ai_model_invalid) {
+            const reason = dbSet.aiModelInvalidReason || dbSet.ai_model_invalid_reason || 'Selected AI model is no longer available.';
+            showWarning(reason);
+          }
+
           if (window.llmAPI) {
             try {
               const status = await window.llmAPI.checkModelStatus();
               if (status && status.warning) {
                 NRDToast.show({ type: 'warning', title: 'AI Model Warning', msg: status.warning });
-                if (aiStatusBadge) {
-                  aiStatusBadge.style.display = '';
-                  aiStatusBadge.style.background = 'rgba(239, 68, 68, 0.15)';
-                  aiStatusBadge.style.border = '1px solid rgba(239, 68, 68, 0.4)';
-                  aiStatusBadge.style.color = '#f87171';
-                  aiStatusBadge.innerHTML = `⚠️ <strong>Model Warning:</strong> ${status.warning}`;
-                }
+                showWarning(status.warning);
               }
             } catch {}
           }

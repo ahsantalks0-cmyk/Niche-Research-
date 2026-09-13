@@ -15,6 +15,7 @@
  */
 
 const { EventEmitter } = require('node:events');
+const db = require('../db');
 
 const VALID_CATEGORIES = [
   'AGENT',
@@ -93,20 +94,41 @@ class LogBus extends EventEmitter {
       ...meta,
     };
 
-    // 1. Push to in-memory ring buffer
+    // 1. Persist to live_logs SQLite table
+    try {
+      if (typeof db.insertLiveLog === 'function') {
+        const rowId = db.insertLiveLog({
+          ts: timestamp,
+          category,
+          message: msg,
+          meta: {
+            level,
+            slotId: entry.slotId,
+            runId: entry.runId,
+            agentNumber: entry.agentNumber,
+            ...meta,
+          },
+        });
+        if (rowId) entry.dbId = rowId;
+      }
+    } catch (err) {
+      // Non-fatal database persistence error
+    }
+
+    // 2. Push to in-memory ring buffer
     this.buffer.push(entry);
     if (this.buffer.length > RING_BUFFER_MAX) {
       this.buffer.shift();
     }
 
-    // 2. Emit event on EventEmitter
+    // 3. Emit event on EventEmitter
     this.emit('log', entry);
 
-    // 3. Print to console stdout
+    // 4. Print to console stdout
     const prefix = `[NRD · ${category}]`;
     console.log(`${prefix} ${msg}`);
 
-    // 4. Broadcast to Electron renderer windows
+    // 5. Broadcast to Electron renderer windows
     try {
       if (typeof process !== 'undefined' && process.versions && process.versions.electron) {
         const { BrowserWindow } = require('electron');
@@ -127,18 +149,33 @@ class LogBus extends EventEmitter {
   }
 
   /**
-   * Returns recent log entries from the ring buffer.
+   * Returns recent log entries from the database (survives restarts/navigation),
+   * falling back to in-memory ring buffer if needed.
    * @param {object} [options={}]
-   * @param {number} [options.limit=100]
+   * @param {number} [options.limit=500]
    * @param {string} [options.category]
    * @param {number} [options.runId]
    * @returns {Array<object>}
    */
   getRecentLogs(options = {}) {
+    try {
+      if (typeof db.getLiveLogs === 'function') {
+        const dbLogs = db.getLiveLogs(options);
+        if (Array.isArray(dbLogs) && dbLogs.length > 0) {
+          if (options.runId) {
+            return dbLogs.filter((e) => Number(e.runId) === Number(options.runId));
+          }
+          return dbLogs;
+        }
+      }
+    } catch {
+      // Fallback to in-memory ring buffer
+    }
+
     const limit = Math.min(Number(options.limit) || 100, RING_BUFFER_MAX);
     let items = this.buffer;
 
-    if (options.category) {
+    if (options.category && options.category !== 'ALL') {
       const cat = this.normalizeCategory(options.category);
       items = items.filter((e) => e.category === cat);
     }
@@ -151,17 +188,35 @@ class LogBus extends EventEmitter {
   }
 
   /**
-   * Clears the in-memory ring buffer.
+   * Clears in-memory ring buffer and deletes all records from live_logs table.
    */
   clear() {
     this.buffer = [];
+    try {
+      if (typeof db.clearLiveLogs === 'function') {
+        db.clearLiveLogs();
+      }
+    } catch {
+      // Ignore
+    }
   }
 
   /**
-   * Formats the ring buffer into exportable text.
+   * Formats logs into exportable text (pulls from DB if available, otherwise buffer).
    * @returns {string}
    */
   exportText() {
+    try {
+      if (typeof db.getAllLiveLogs === 'function') {
+        const rows = db.getAllLiveLogs();
+        if (Array.isArray(rows) && rows.length > 0) {
+          return rows
+            .map((e) => `[${e.timestamp}] [${e.category}] ${e.slotId ? `[Slot #${e.slotId}] ` : ''}${e.message}`)
+            .join('\n');
+        }
+      }
+    } catch {}
+
     return this.buffer
       .map((e) => `[${e.timestamp}] [${e.category}] ${e.slotId ? `[Slot #${e.slotId}] ` : ''}${e.message}`)
       .join('\n');
@@ -169,6 +224,21 @@ class LogBus extends EventEmitter {
 }
 
 const logBus = new LogBus();
+
+// Auto-prune on startup and periodically (every 10 minutes)
+try {
+  if (typeof db.pruneLiveLogs === 'function') {
+    db.pruneLiveLogs(2000);
+  }
+} catch {}
+
+setInterval(() => {
+  try {
+    if (typeof db.pruneLiveLogs === 'function') {
+      db.pruneLiveLogs(2000);
+    }
+  } catch {}
+}, 10 * 60 * 1000);
 
 module.exports = {
   logBus,

@@ -225,6 +225,15 @@ app.post('/api/engine/clear-logs', (_req, res) => {
   }
 });
 
+app.get('/api/engine/export-logs', (_req, res) => {
+  try {
+    const text = logBus.exportText();
+    res.json({ text });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/engine/quality-reviews', (req, res) => {
   try {
     const runId = req.query.runId ? Number(req.query.runId) : null;

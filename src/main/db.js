@@ -15,6 +15,7 @@ const migrationV2 = require('./migrations/v2');
 const migrationV3 = require('./migrations/v3');
 const migrationV4 = require('./migrations/v4');
 const migrationV5 = require('./migrations/v5');
+const migrationV6 = require('./migrations/v6');
 
 const MIGRATIONS = [
   migrationV1,
@@ -22,6 +23,7 @@ const MIGRATIONS = [
   migrationV3,
   migrationV4,
   migrationV5,
+  migrationV6,
 ];
 
 let _db = null;
@@ -91,9 +93,10 @@ function getDb(customPath) {
 /**
  * Executes version-based migrations sequentially.
  * Tracks applied migrations in the schema_migrations table.
- * @param {import('better-sqlite3').Database} db
+ * @param {import('better-sqlite3').Database} [database]
  */
-function runMigrations(db) {
+function runMigrations(database) {
+  const db = database || getDb();
   // Ensure the migration tracker table exists
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -358,6 +361,14 @@ function getSettings() {
     rate_limit_google_per_min: row.rate_limit_google_per_min !== undefined ? Number(row.rate_limit_google_per_min) : 8,
     maxRetries: row.max_retries !== undefined ? Number(row.max_retries) : 3,
     max_retries: row.max_retries !== undefined ? Number(row.max_retries) : 3,
+    aiProvider: row.ai_provider || 'gemini',
+    ai_provider: row.ai_provider || 'gemini',
+    aiModel: row.ai_model || 'gemini-2.5-flash',
+    ai_model: row.ai_model || 'gemini-2.5-flash',
+    aiModelInvalid: row.ai_model_invalid !== undefined ? Number(row.ai_model_invalid) : 0,
+    ai_model_invalid: row.ai_model_invalid !== undefined ? Number(row.ai_model_invalid) : 0,
+    aiModelInvalidReason: row.ai_model_invalid_reason || '',
+    ai_model_invalid_reason: row.ai_model_invalid_reason || '',
   };
 }
 
@@ -389,6 +400,14 @@ function saveSettings(patch = {}) {
     rate_limit_google_per_min: 'rate_limit_google_per_min',
     maxRetries: 'max_retries',
     max_retries: 'max_retries',
+    aiProvider: 'ai_provider',
+    ai_provider: 'ai_provider',
+    aiModel: 'ai_model',
+    ai_model: 'ai_model',
+    aiModelInvalid: 'ai_model_invalid',
+    ai_model_invalid: 'ai_model_invalid',
+    aiModelInvalidReason: 'ai_model_invalid_reason',
+    ai_model_invalid_reason: 'ai_model_invalid_reason',
   };
 
   const fields = {};
@@ -1107,6 +1126,156 @@ function getQualitySummary(runId) {
   };
 }
 
+/* ══════════════════════════════════════════════════════════════
+   LIVE LOGS PERSISTENCE & RETRIEVAL (P1.3f)
+   ══════════════════════════════════════════════════════════════ */
+
+let _insertLiveLogStmt = null;
+
+/**
+ * Inserts a live log record into live_logs table.
+ * Uses a cached prepared statement for speed.
+ * @param {object} log
+ * @param {string} log.ts
+ * @param {string} log.category
+ * @param {string} log.message
+ * @param {object} [log.meta]
+ */
+function insertLiveLog({ ts, category, message, meta }) {
+  try {
+    const db = getDb();
+    if (!_insertLiveLogStmt) {
+      _insertLiveLogStmt = db.prepare(`
+        INSERT INTO live_logs (ts, category, message, meta_json)
+        VALUES (?, ?, ?, ?)
+      `);
+    }
+    const metaJson = meta ? JSON.stringify(meta) : null;
+    const info = _insertLiveLogStmt.run(ts || new Date().toISOString(), category || 'BROWSER', message || '', metaJson);
+    return info.lastInsertRowid;
+  } catch (err) {
+    console.error('[db] insertLiveLog error:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Retrieves the latest live logs from live_logs table, ordered chronologically (newest last).
+ * @param {object} [options={}]
+ * @param {number} [options.limit=500]
+ * @param {string} [options.category]
+ * @returns {Array<object>}
+ */
+function getLiveLogs(options = {}) {
+  const db = getDb();
+  const limit = Math.min(Number(options.limit) || 500, 2000);
+  let rows = [];
+
+  if (options.category && options.category !== 'ALL') {
+    rows = db.prepare(`
+      SELECT * FROM (
+        SELECT id, ts, category, message, meta_json, created_at
+        FROM live_logs
+        WHERE category = ?
+        ORDER BY id DESC
+        LIMIT ?
+      ) ORDER BY id ASC
+    `).all(options.category, limit);
+  } else {
+    rows = db.prepare(`
+      SELECT * FROM (
+        SELECT id, ts, category, message, meta_json, created_at
+        FROM live_logs
+        ORDER BY id DESC
+        LIMIT ?
+      ) ORDER BY id ASC
+    `).all(limit);
+  }
+
+  return rows.map((r) => {
+    let meta = {};
+    if (r.meta_json) {
+      try {
+        meta = JSON.parse(r.meta_json);
+      } catch {}
+    }
+    return {
+      id: r.id,
+      timestamp: r.ts || r.created_at,
+      category: r.category,
+      type: (r.category || 'info').toLowerCase(),
+      level: meta.level || 'info',
+      message: r.message,
+      slotId: meta.slotId !== undefined ? meta.slotId : null,
+      runId: meta.runId !== undefined ? meta.runId : null,
+      agentNumber: meta.agentNumber !== undefined ? meta.agentNumber : null,
+      details: meta.details || null,
+      ...meta,
+    };
+  });
+}
+
+/**
+ * Returns all live_logs for export.
+ * @returns {Array<object>}
+ */
+function getAllLiveLogs() {
+  const db = getDb();
+  const rows = db.prepare('SELECT id, ts, category, message, meta_json, created_at FROM live_logs ORDER BY id ASC').all();
+  return rows.map((r) => {
+    let meta = {};
+    if (r.meta_json) {
+      try {
+        meta = JSON.parse(r.meta_json);
+      } catch {}
+    }
+    return {
+      id: r.id,
+      timestamp: r.ts || r.created_at,
+      category: r.category,
+      message: r.message,
+      ...meta,
+    };
+  });
+}
+
+/**
+ * Prunes live_logs to retain only the latest maxRows (default 2000).
+ * @param {number} [maxRows=2000]
+ * @returns {number} Count of pruned rows
+ */
+function pruneLiveLogs(maxRows = 2000) {
+  try {
+    const db = getDb();
+    const countRow = db.prepare('SELECT COUNT(*) as total FROM live_logs').get();
+    const total = countRow ? countRow.total : 0;
+    if (total <= maxRows) return 0;
+
+    const excess = total - maxRows;
+    const info = db.prepare(`
+      DELETE FROM live_logs
+      WHERE id IN (
+        SELECT id FROM live_logs ORDER BY id ASC LIMIT ?
+      )
+    `).run(excess);
+
+    return info.changes;
+  } catch (err) {
+    console.error('[db] pruneLiveLogs error:', err.message);
+    return 0;
+  }
+}
+
+/**
+ * Clears all rows in live_logs table.
+ * @returns {number} Count of deleted rows
+ */
+function clearLiveLogs() {
+  const db = getDb();
+  const info = db.prepare('DELETE FROM live_logs').run();
+  return info.changes;
+}
+
 module.exports = {
   getDbPath,
   getDb,
@@ -1140,4 +1309,9 @@ module.exports = {
   insertQualityReview,
   getQualityReviews,
   getQualitySummary,
+  insertLiveLog,
+  getLiveLogs,
+  getAllLiveLogs,
+  pruneLiveLogs,
+  clearLiveLogs,
 };

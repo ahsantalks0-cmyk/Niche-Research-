@@ -255,6 +255,9 @@ function registerEngineIpc(mainWindow) {
     logBus.clear();
     return { success: true };
   });
+  ipcMain.handle('engine:export-logs', () => {
+    return logBus.exportText();
+  });
 
   const { chainEngine } = require('./engine/chainEngine');
 

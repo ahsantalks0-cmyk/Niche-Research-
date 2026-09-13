@@ -244,6 +244,17 @@ async function chat(options = {}) {
       errTextLower.includes('credit_balance')
     );
 
+    const isModelNotFound = (
+      res.status === 404 ||
+      res.errorCode === 'MODEL_NOT_FOUND' ||
+      errTextLower.includes('not found') ||
+      errTextLower.includes('is not found') ||
+      errTextLower.includes('does not exist') ||
+      errTextLower.includes('no longer available') ||
+      errTextLower.includes('model_not_found') ||
+      errTextLower.includes('resource has been exhausted') === false && errTextLower.includes('not supported')
+    );
+
     const errReason = res.providerMessage || res.error || 'Unknown error';
     emitLog('LLM', `❌ Request failed (${provider.name}/${modelId}) — status ${res.status || 'ERR'}: ${errReason}`, {
       provider: providerId,
@@ -259,15 +270,41 @@ async function chat(options = {}) {
       });
     }
 
+    if (isModelNotFound) {
+      const reasonMsg = `Your selected model '${modelId}' is no longer available from ${provider.name} — please reselect in Settings.`;
+      emitLog('LLM', `⚠️ Model expired or not found: ${provider.name}/${modelId} (HTTP ${res.status})`, {
+        provider: providerId,
+        model: modelId,
+      });
+
+      // Update app_settings with invalid model flag
+      try {
+        if (typeof db.saveSettings === 'function') {
+          db.saveSettings({
+            ai_model_invalid: 1,
+            ai_model_invalid_reason: reasonMsg,
+          });
+        }
+      } catch (err) {
+        console.error('[llmClient] Failed to mark model as invalid in settings:', err.message);
+      }
+
+      // Automatically trigger background model list refresh
+      if (apiKey) {
+        fetchModels(providerId, apiKey).catch(() => {});
+      }
+    }
+
     return {
       ok: false,
       success: false,
       content: null,
       status: res.status,
       providerMessage: res.providerMessage,
-      errorCode: res.errorCode,
-      hint: res.hint,
+      errorCode: isModelNotFound ? 'MODEL_NOT_FOUND' : res.errorCode,
+      hint: isModelNotFound ? 'Selected model is discontinued or not found. Go to Settings → AI Provider and choose an active model.' : res.hint,
       isBillingError: isBilling,
+      isModelNotFound,
       error: res.error || res.providerMessage,
       isConfigured: true,
       provider: providerId,
@@ -333,7 +370,7 @@ async function chat(options = {}) {
 }
 
 /**
- * Checks if selected model is still valid in cached/live model list.
+ * Checks if selected model is still valid in cached/live model list or has been flagged invalid.
  * @returns {Promise<{ valid: boolean, warning?: string }>}
  */
 async function checkSelectedModelStatus() {
@@ -344,6 +381,14 @@ async function checkSelectedModelStatus() {
 
   try {
     const settings = db.getSettings() || {};
+    // Check if flagged invalid in database
+    if (settings.ai_model_invalid || settings.aiModelInvalid) {
+      return {
+        valid: false,
+        warning: settings.ai_model_invalid_reason || settings.aiModelInvalidReason || `Your selected model '${cfg.modelId}' is no longer available — please reselect in Settings`,
+      };
+    }
+
     let cache = {};
     if (settings.models_cache_json) {
       try {
@@ -355,9 +400,16 @@ async function checkSelectedModelStatus() {
     if (providerCache && Array.isArray(providerCache.models)) {
       const exists = providerCache.models.some((m) => m.id === cfg.modelId);
       if (!exists) {
+        const warning = `Your selected model '${cfg.modelId}' is no longer available from ${cfg.providerId} — please reselect in Settings`;
+        try {
+          db.saveSettings({
+            ai_model_invalid: 1,
+            ai_model_invalid_reason: warning,
+          });
+        } catch {}
         return {
           valid: false,
-          warning: `Your selected model '${cfg.modelId}' is no longer available — please reselect`,
+          warning,
         };
       }
     }
