@@ -276,7 +276,7 @@
       return el;
     },
 
-    mounted() {
+    mounted(params) {
       const self = this;
 
       // Component State
@@ -646,6 +646,11 @@
           }
         });
       });
+
+      if (params && params.mode) {
+        const targetCard = document.querySelector(`.mode-tab-card[data-mode="${params.mode}"]`);
+        if (targetCard) targetCard.click();
+      }
 
       // 7. Business Modes Selection Events
       const bizCards = document.querySelectorAll('.biz-card');

@@ -187,6 +187,18 @@
     });
   }
 
+  window.NRDApp = {
+    navigateTo(page, params = {}) {
+      if (params && Object.keys(params).length > 0) {
+        const q = new URLSearchParams(params).toString();
+        location.hash = `#/${page}?${q}`;
+      } else {
+        location.hash = `#/${page}`;
+      }
+    },
+    setPage,
+  };
+
   /* ----------------------------------- boot ----------------------------------- */
 
   async function boot() {

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * NRD · pages/niches.js — Discovered Niches Library (Part B - Agent #6)
+ * NRD · pages/niches.js — Discovered Niches Library (Part B - Agent #6 & Agent #7)
  */
 (function () {
   window.NRDPages = window.NRDPages || {};
@@ -26,24 +26,49 @@
     }
   };
 
+  const getVerdictBadgeHTML = (verdict) => {
+    if (!verdict) return '';
+    const v = String(verdict).toUpperCase();
+    if (v === 'STRONG') {
+      return `<span class="badge" style="background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3); font-size:10px;">📈 STRONG DEMAND</span>`;
+    }
+    if (v === 'MODERATE') {
+      return `<span class="badge" style="background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); font-size:10px;">➡️ MODERATE DEMAND</span>`;
+    }
+    if (v === 'WEAK') {
+      return `<span class="badge" style="background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3); font-size:10px;">📉 WEAK DEMAND</span>`;
+    }
+    return `<span class="badge" style="background:rgba(156,163,175,0.15); color:#9ca3af; border:1px solid rgba(156,163,175,0.3); font-size:10px;">❓ INSUFFICIENT DATA</span>`;
+  };
+
+  const goToDiscoveryRun = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (window.NRDApp && window.NRDApp.navigateTo) {
+      window.NRDApp.navigateTo('research', { mode: 'discovery' });
+    } else {
+      location.hash = '#/research?mode=discovery';
+    }
+  };
+
   const renderNicheCards = (container, list = []) => {
     if (!container) return;
     if (!Array.isArray(list) || list.length === 0) {
       container.innerHTML = `
         <div class="empty" style="grid-column: 1 / -1; padding: 40px 20px;">
-          <div class="e-icon">${NRDIcons ? NRDIcons.get('compass') : '🔍'}</div>
+          <div class="e-icon">${typeof NRDIcons !== 'undefined' ? NRDIcons.get('compass') : '🔍'}</div>
           <h3>No matching niches found</h3>
           <p>Start a new Discovery research run or adjust your search filters.</p>
           <button class="btn btn-cu" id="btn-niche-start-run" style="margin-top:12px">
-            Start Research Run
+            Start Discovery Run
           </button>
         </div>
       `;
       const btn = container.querySelector('#btn-niche-start-run');
       if (btn) {
-        btn.addEventListener('click', () => {
-          if (window.NRDApp && window.NRDApp.navigateTo) window.NRDApp.navigateTo('research');
-        });
+        btn.addEventListener('click', goToDiscoveryRun);
       }
       return;
     }
@@ -58,12 +83,15 @@
         domain_inferred: '🔍 Domain Inferred',
       };
       const sourceTag = sourceLabels[n.source] || '🔍 Discovered';
+      const demandBadge = getVerdictBadgeHTML(n.demand_verdict);
+      const createdStr = n.created_at ? new Date(n.created_at.replace(' ', 'T') + 'Z').toLocaleDateString() : 'Recent';
 
       return `
         <div class="panel panel-pad niche-card" style="display:flex; flex-direction:column; justify-content:space-between; transition:border-color 0.15s ease; border:1px solid var(--border)">
           <div>
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:6px; flex-wrap:wrap">
               <span class="badge badge-active" style="font-size:10px; text-transform:uppercase">${escapeHtml(n.discovery_status || 'Discovered')}</span>
+              ${demandBadge}
               <span class="badge badge-outline" style="font-size:10px">${sourceTag}</span>
             </div>
 
@@ -80,18 +108,31 @@
 
           <div>
             <div style="display:flex; wrap:wrap; gap:4px; margin-bottom:10px">
-              ${modeFit.map(m => `<span class="badge" style="font-size:9.5px; background:rgba(147,51,234,0.12); color:#c084fc; border:1px solid rgba(147,51,234,0.25)">${escapeHtml(m)}</span>`).join('')}
-              ${countries.map(c => `<span class="badge badge-outline" style="font-size:9.5px">${escapeHtml(c)}</span>`).join('')}
+              ${modeFit.map((m) => `<span class="badge" style="font-size:9.5px; background:rgba(147,51,234,0.12); color:#c084fc; border:1px solid rgba(147,51,234,0.25)">${escapeHtml(m)}</span>`).join('')}
+              ${countries.map((c) => `<span class="badge badge-outline" style="font-size:9.5px">${escapeHtml(c)}</span>`).join('')}
             </div>
 
             <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border); padding-top:8px; font-size:10.5px; color:var(--text-dim)">
-              <span>Run #${n.run_id || '—'}</span>
-              <span>ID #${n.id}</span>
+              <span class="niche-run-link" data-runid="${n.run_id}" style="color:var(--text-1); text-decoration:underline; font-weight:600; cursor:pointer">Run #${n.run_id || '—'}</span>
+              <span>${createdStr}</span>
             </div>
           </div>
         </div>
       `;
     }).join('');
+
+    // Delegate click handler for Run links
+    container.addEventListener('click', (e) => {
+      const link = e.target.closest('.niche-run-link');
+      if (link && link.dataset.runid && link.dataset.runid !== '—') {
+        e.preventDefault();
+        if (window.NRDApp && window.NRDApp.navigateTo) {
+          window.NRDApp.navigateTo('run-detail', { id: link.dataset.runid });
+        } else {
+          location.hash = `#/run-detail?id=${link.dataset.runid}`;
+        }
+      }
+    });
   };
 
   window.NRDPages.niches = {
@@ -106,10 +147,10 @@
         <div class="page-head">
           <div>
             <h2>Niche Library</h2>
-            <div class="ph-sub">Real discovered candidate niches from Agent #6 (Niche Discovery Agent) grounded in web signals.</div>
+            <div class="ph-sub">Real discovered candidate niches & trend demand signals from Agent #6 & Agent #7.</div>
           </div>
           <button class="btn btn-cu" id="btn-niches-new-run">
-            ${NRDIcons ? NRDIcons.get('play') : '▶'} Start Discovery Run
+            ${typeof NRDIcons !== 'undefined' ? NRDIcons.get('play') : '▶'} Start Discovery Run
           </button>
         </div>
 
@@ -178,9 +219,7 @@
       if (modeSelect) modeSelect.addEventListener('change', filterAndRender);
       if (btnRefresh) btnRefresh.addEventListener('click', loadNiches);
       if (btnNewRun) {
-        btnNewRun.addEventListener('click', () => {
-          if (window.NRDApp && window.NRDApp.navigateTo) window.NRDApp.navigateTo('research');
-        });
+        btnNewRun.addEventListener('click', goToDiscoveryRun);
       }
 
       await loadNiches();
@@ -189,4 +228,3 @@
     destroy() {},
   };
 })();
-

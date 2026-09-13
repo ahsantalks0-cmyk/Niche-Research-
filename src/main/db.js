@@ -20,6 +20,7 @@ const migrationV7 = require('./migrations/v7');
 const migrationV8 = require('./migrations/v8');
 const migrationV9 = require('./migrations/v9');
 const migrationV10 = require('./migrations/v10');
+const migrationV11 = require('./migrations/v11');
 
 const MIGRATIONS = [
   migrationV1,
@@ -32,6 +33,7 @@ const MIGRATIONS = [
   migrationV8,
   migrationV9,
   migrationV10,
+  migrationV11,
 ];
 
 let _db = null;

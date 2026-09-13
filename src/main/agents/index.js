@@ -10,6 +10,7 @@ const qualitySupervisor = require('./qualitySupervisor');
 const scheduler = require('./scheduler');
 const jarvisGateway = require('./jarvisGateway');
 const nicheDiscovery = require('./nicheDiscovery');
+const trendDemand = require('./trendDemand');
 
 module.exports = {
   departmentHead,
@@ -18,6 +19,7 @@ module.exports = {
   scheduler,
   jarvisGateway,
   nicheDiscovery,
+  trendDemand,
   parseRun: criteriaParser.parseRun,
 };
 

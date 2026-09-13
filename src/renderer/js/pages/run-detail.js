@@ -83,10 +83,131 @@
     return `<span class="ag-icon ag-idle" title="Queued">⏳</span>`;
   }
 
+  let candidateNiches = [];
+  let trendDataMap = {};
+
+  const escapeHtml = (str) => {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  };
+
+  function renderCandidateNicheCardHTML(niche, trendRows = []) {
+    const verdict = niche.demand_verdict || (trendRows.length > 0 ? trendRows[0].verdict : 'INSUFFICIENT_DATA');
+    const mainTrend = trendRows.length > 0 ? trendRows[0] : null;
+    const direction = mainTrend ? mainTrend.direction : (niche.trend_status ? niche.trend_status.toUpperCase() : 'UNKNOWN');
+    const interestAvg = mainTrend && typeof mainTrend.interest_avg === 'number' ? mainTrend.interest_avg : null;
+    const seasonality = mainTrend && mainTrend.seasonality ? mainTrend.seasonality : (niche.seasonality || 'Not evaluated');
+
+    let timelinePoints = [];
+    if (mainTrend && mainTrend.timeline_json) {
+      try {
+        timelinePoints = typeof mainTrend.timeline_json === 'string' ? JSON.parse(mainTrend.timeline_json) : mainTrend.timeline_json;
+      } catch {}
+    }
+
+    let suggestions = [];
+    if (mainTrend && mainTrend.autocomplete_json) {
+      try {
+        suggestions = typeof mainTrend.autocomplete_json === 'string' ? JSON.parse(mainTrend.autocomplete_json) : mainTrend.autocomplete_json;
+      } catch {}
+    }
+
+    const getVerdictBadge = (v) => {
+      const str = String(v || '').toUpperCase();
+      if (str === 'STRONG') return `<span class="badge" style="background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3)">📈 STRONG DEMAND</span>`;
+      if (str === 'MODERATE') return `<span class="badge" style="background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3)">➡️ MODERATE DEMAND</span>`;
+      if (str === 'WEAK') return `<span class="badge" style="background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3)">📉 WEAK DEMAND</span>`;
+      return `<span class="badge" style="background:rgba(156,163,175,0.15); color:#9ca3af; border:1px solid rgba(156,163,175,0.3)">❓ INSUFFICIENT DATA</span>`;
+    };
+
+    const getDirectionBadge = (d) => {
+      const str = String(d || '').toUpperCase();
+      if (str === 'RISING') return `<span class="badge badge-active" style="font-size:10px;">📈 RISING</span>`;
+      if (str === 'STABLE') return `<span class="badge badge-outline" style="font-size:10px;">➡️ STABLE</span>`;
+      if (str === 'DECLINING') return `<span class="badge badge-failed" style="font-size:10px;">📉 DECLINING</span>`;
+      return `<span class="badge badge-subtle" style="font-size:10px;">❓ UNKNOWN</span>`;
+    };
+
+    const maxVal = timelinePoints.length > 0 ? Math.max(...timelinePoints.map((p) => p.value || 0), 1) : 100;
+
+    return `
+      <div class="candidate-niche-card" style="background:var(--ink-900, #121215); border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin-bottom:8px">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap">
+          <div>
+            <div style="font-size:14px; font-weight:600; color:var(--text-1);">${escapeHtml(niche.niche_name)}</div>
+            <div style="font-size:11px; color:var(--text-3); margin-top:2px;">${escapeHtml(niche.description || '')}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap">
+            ${getVerdictBadge(verdict)}
+            ${getDirectionBadge(direction)}
+            ${interestAvg !== null ? `<span class="badge badge-outline" style="font-size:10px; font-weight:600;">Avg Interest: ${interestAvg}/100</span>` : ''}
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:10.5px; color:var(--text-dim)">
+          <span>Source: <strong>${escapeHtml(niche.source || 'web_signal')}</strong></span>
+          <button class="btn btn-xs btn-subtle toggle-trend-drawer" data-id="${niche.id}" style="font-size:10px">
+            📊 Toggle Demand Signals & 12M Timeline ▼
+          </button>
+        </div>
+
+        <div class="trend-drawer-content" id="trend-drawer-${niche.id}" style="display:none; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border)">
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:10px">
+            <div>
+              <div style="font-size:10.5px; font-weight:600; color:var(--text-2); margin-bottom:4px">12-MONTH SEARCH INTEREST TIMELINE</div>
+              ${timelinePoints.length > 0 ? `
+                <div style="display:flex; align-items:flex-end; gap:2px; height:40px; background:var(--ink-950, #09090b); padding:4px; border-radius:4px; border:1px solid var(--border)">
+                  ${timelinePoints.map((p) => {
+                    const h = Math.max(4, Math.round(((p.value || 0) / maxVal) * 32));
+                    return `<div style="flex:1; background:${p.value > 50 ? '#4ade80' : '#fbbf24'}; height:${h}px; border-radius:1px" title="${escapeHtml(p.date)}: ${p.value}/100"></div>`;
+                  }).join('')}
+                </div>
+              ` : `<div style="font-size:11px; color:var(--text-dim)">No timeline points recorded.</div>`}
+            </div>
+
+            <div>
+              <div style="font-size:10.5px; font-weight:600; color:var(--text-2); margin-bottom:4px">SEASONALITY & VOLATILITY</div>
+              <div style="font-size:11px; color:var(--text-1); background:var(--ink-950, #09090b); padding:6px 8px; border-radius:4px; border:1px solid var(--border)">
+                ${escapeHtml(seasonality)}
+              </div>
+            </div>
+          </div>
+
+          ${suggestions.length > 0 ? `
+            <div>
+              <div style="font-size:10.5px; font-weight:600; color:var(--text-2); margin-bottom:4px">TOP AUTOCOMPLETE DEMAND PROXIES</div>
+              <div style="display:flex; flex-wrap:wrap; gap:4px">
+                ${suggestions.map((s) => `<span class="badge badge-outline" style="font-size:9.5px; background:var(--ink-950, #09090b);">${escapeHtml(s)}</span>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
   async function loadData() {
     if (!currentRunId || !window.dbAPI) return;
     try {
       runData = await window.dbAPI.getRun(currentRunId);
+
+      if (window.dbAPI.findBy) {
+        const nicheRows = await window.dbAPI.findBy('niches', { run_id: currentRunId });
+        candidateNiches = Array.isArray(nicheRows) ? nicheRows : [];
+
+        const trendRows = await window.dbAPI.findBy('trend_data', { run_id: currentRunId });
+        trendDataMap = {};
+        if (Array.isArray(trendRows)) {
+          for (const t of trendRows) {
+            if (!trendDataMap[t.niche_id]) trendDataMap[t.niche_id] = [];
+            trendDataMap[t.niche_id].push(t);
+          }
+        }
+      }
+
       if (window.engineAPI) {
         if (window.engineAPI.getTimingSummary) {
           timingData = await window.engineAPI.getTimingSummary(currentRunId);
@@ -188,10 +309,16 @@
 
           <div class="ag-body">
             <div class="ag-niche-preview-box">
-              <div class="ag-preview-title">Discovered Niches Ready for Deep Research:</div>
-              <div class="ag-preview-placeholder">
-                <em>Niches will appear here after Discovery agents execute in Phase 3.x.</em>
-              </div>
+              <div class="ag-preview-title" style="font-weight:600; margin-bottom:8px;">Discovered Niches & Demand Signals Ready for Deep Research (${candidateNiches.length}):</div>
+              ${candidateNiches.length > 0 ? `
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  ${candidateNiches.map((n) => renderCandidateNicheCardHTML(n, trendDataMap[n.id])).join('')}
+                </div>
+              ` : `
+                <div class="ag-preview-placeholder">
+                  <em>No candidate niches found for this run yet.</em>
+                </div>
+              `}
             </div>
 
             <div class="ag-actions">

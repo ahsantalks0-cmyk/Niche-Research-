@@ -39,6 +39,7 @@ try {
   require('../agents/qualitySupervisor');
   require('../agents/scheduler');
   require('../agents/nicheDiscovery');
+  require('../agents/trendDemand');
 } catch {
   // Graceful fallback if agent files are initialized out of order in test runners
 }

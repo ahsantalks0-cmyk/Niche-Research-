@@ -153,7 +153,7 @@ class NicheDiscoveryAgent {
       ? parsedBrief.countries.list
       : (runRecord.target_countries ? runRecord.target_countries.split(',') : ['US']);
     const domain = parsedBrief.domain || runRecord.domain || '';
-    const ownNiche = parsedBrief.own_niche || '';
+    const ownNiche = parsedBrief.own_niche_name || parsedBrief.own_niche || runRecord.own_niche_name || '';
 
     let candidates = [];
 
