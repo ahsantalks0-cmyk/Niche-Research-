@@ -168,6 +168,33 @@ function registerDbIpc() {
     };
   });
 
+  /* ══════════════ Senior Consultant Chat Handlers (P2.1) ══════════════ */
+  ipcMain.handle('consultant:getChats', () => {
+    return db.getConsultantChats();
+  });
+
+  ipcMain.handle('consultant:createChat', (_e, title) => {
+    return db.createConsultantChat(title || 'Strategy Consultation');
+  });
+
+  ipcMain.handle('consultant:deleteChat', (_e, chatId) => {
+    return db.deleteConsultantChat(chatId);
+  });
+
+  ipcMain.handle('consultant:getMessages', (_e, chatId) => {
+    return db.getConsultantMessages(chatId);
+  });
+
+  ipcMain.handle('consultant:sendMessage', async (_e, { chatId, message }) => {
+    const { consultantAgent } = require('./agents/consultant');
+    return await consultantAgent.sendMessage(chatId, message);
+  });
+
+  ipcMain.handle('consultant:executeAction', async (_e, actionProposal) => {
+    const { consultantAgent } = require('./agents/consultant');
+    return await consultantAgent.executeAction(actionProposal);
+  });
+
   // KPI & Health
   ipcMain.handle('db:getCounts', () => {
     return db.getCounts();

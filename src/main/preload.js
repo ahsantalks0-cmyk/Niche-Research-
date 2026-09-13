@@ -169,3 +169,12 @@ contextBridge.exposeInMainWorld('jarvisAPI', {
   getRecentRequests: (limit) => ipcRenderer.invoke('jarvis:getRecentRequests', limit),
 });
 
+contextBridge.exposeInMainWorld('consultantAPI', {
+  getChats: () => ipcRenderer.invoke('consultant:getChats'),
+  createChat: (title) => ipcRenderer.invoke('consultant:createChat', title),
+  deleteChat: (chatId) => ipcRenderer.invoke('consultant:deleteChat', chatId),
+  getMessages: (chatId) => ipcRenderer.invoke('consultant:getMessages', chatId),
+  sendMessage: (chatId, message) => ipcRenderer.invoke('consultant:sendMessage', { chatId, message }),
+  executeAction: (actionProposal) => ipcRenderer.invoke('consultant:executeAction', actionProposal),
+});
+

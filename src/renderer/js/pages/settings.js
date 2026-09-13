@@ -109,6 +109,7 @@
                   <input class="input" id="ai-provider-key" type="password" placeholder="Enter API Key…" />
                   <button class="btn btn-outline" id="btn-toggle-key" type="button">Show</button>
                   <button class="btn btn-outline" id="btn-paste-key" type="button">Paste</button>
+                  <button class="btn btn-outline" id="btn-delete-key" type="button" style="color:#f87171; border-color:rgba(248,113,113,0.3)" title="Delete saved key for this provider">Delete Key</button>
                   <button class="btn btn-cu" id="btn-test-provider" type="button">Test Connection</button>
                 </div>
               </div>
@@ -256,7 +257,7 @@
                   <input class="input" id="sched-time-daily" type="time" value="09:00" style="width:100%; font-size:12px" />
                 </div>
 
-                <div id="sched-opt-weekly" style="display:none; margin-bottom:10px; display:grid; grid-template-columns:1fr 1fr; gap:10px">
+                <div id="sched-opt-weekly" style="display:none; margin-bottom:10px; grid-template-columns:1fr 1fr; gap:10px">
                   <div>
                     <label style="font-size:11px; color:var(--text-2); display:block; margin-bottom:4px">Day of Week</label>
                     <select class="select" id="sched-dow" style="width:100%; font-size:12px">
@@ -715,6 +716,40 @@
             if (txt) aiProviderKey.value = txt.trim();
           } catch {
             NRDToast.show({ type: 'warning', title: 'Clipboard unavailable', msg: 'Paste manually into field.' });
+          }
+        });
+      }
+
+      const btnDeleteKey = document.getElementById('btn-delete-key');
+      if (btnDeleteKey) {
+        btnDeleteKey.addEventListener('click', async () => {
+          const pId = aiProviderSelect.value;
+          if (!pId) return;
+
+          const providerNames = { gemini: 'Google Gemini', openai: 'OpenAI', anthropic: 'Anthropic', groq: 'Groq' };
+          const pName = providerNames[pId] || pId;
+
+          setApiKeyFieldForProvider(pId, '');
+          if (aiProviderKey) aiProviderKey.value = '';
+
+          const patch = {};
+          if (pId === 'gemini') patch.geminiApiKey = '';
+          if (pId === 'openai') patch.openaiApiKey = '';
+          if (pId === 'anthropic') patch.anthropicApiKey = '';
+          if (pId === 'groq') patch.groqApiKey = '';
+
+          try {
+            if (window.dbAPI) {
+              await window.dbAPI.saveSettings(patch);
+            }
+            savedSettings = { ...savedSettings, ...patch };
+            NRDToast.show({
+              type: 'info',
+              title: 'Key Deleted',
+              msg: `${pName} API Key deleted from SQLite app_settings.`
+            });
+          } catch (err) {
+            NRDToast.show({ type: 'error', title: 'Delete Failed', msg: err.message });
           }
         });
       }

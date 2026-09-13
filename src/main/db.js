@@ -18,6 +18,7 @@ const migrationV5 = require('./migrations/v5');
 const migrationV6 = require('./migrations/v6');
 const migrationV7 = require('./migrations/v7');
 const migrationV8 = require('./migrations/v8');
+const migrationV9 = require('./migrations/v9');
 
 const MIGRATIONS = [
   migrationV1,
@@ -28,6 +29,7 @@ const MIGRATIONS = [
   migrationV6,
   migrationV7,
   migrationV8,
+  migrationV9,
 ];
 
 let _db = null;
@@ -349,6 +351,12 @@ function getSettings() {
     auto_approve: !!row.auto_approve,
     geminiApiKey: row.gemini_api_key || '',
     gemini_api_key: row.gemini_api_key || '',
+    openaiApiKey: row.openai_api_key || '',
+    openai_api_key: row.openai_api_key || '',
+    anthropicApiKey: row.anthropic_api_key || '',
+    anthropic_api_key: row.anthropic_api_key || '',
+    groqApiKey: row.groq_api_key || '',
+    groq_api_key: row.groq_api_key || '',
     jarvisApiKey: row.jarvis_api_key || '',
     jarvis_api_key: row.jarvis_api_key || '',
     whiteLabelBrand: row.white_label_brand || '',
@@ -390,6 +398,12 @@ function saveSettings(patch = {}) {
     auto_approve: 'auto_approve',
     geminiApiKey: 'gemini_api_key',
     gemini_api_key: 'gemini_api_key',
+    openaiApiKey: 'openai_api_key',
+    openai_api_key: 'openai_api_key',
+    anthropicApiKey: 'anthropic_api_key',
+    anthropic_api_key: 'anthropic_api_key',
+    groqApiKey: 'groq_api_key',
+    groq_api_key: 'groq_api_key',
     jarvisApiKey: 'jarvis_api_key',
     jarvis_api_key: 'jarvis_api_key',
     whiteLabelBrand: 'white_label_brand',
@@ -1410,6 +1424,48 @@ function getJarvisRequests(limit = 10) {
   `).all(limit);
 }
 
+/* ══════════════════════════════════════════════════════════════
+   SENIOR CONSULTANT CHAT DB METHODS (P2.1)
+   ══════════════════════════════════════════════════════════════ */
+
+function getConsultantChats() {
+  const db = getDb();
+  return db.prepare(`SELECT * FROM consultant_chats ORDER BY updated_at DESC`).all();
+}
+
+function createConsultantChat(title = 'Strategy Consultation') {
+  const db = getDb();
+  const res = db.prepare(`INSERT INTO consultant_chats (title) VALUES (?)`).run(title);
+  return db.prepare(`SELECT * FROM consultant_chats WHERE id = ?`).get(res.lastInsertRowid);
+}
+
+function getConsultantMessages(chatId) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT id, chat_id, role, content, tool_calls, created_at
+    FROM consultant_messages
+    WHERE chat_id = ?
+    ORDER BY id ASC
+  `).all(chatId);
+}
+
+function addConsultantMessage(chatId, role, content, toolCalls = null) {
+  const db = getDb();
+  const toolCallsStr = toolCalls ? (typeof toolCalls === 'string' ? toolCalls : JSON.stringify(toolCalls)) : null;
+  const res = db.prepare(`
+    INSERT INTO consultant_messages (chat_id, role, content, tool_calls)
+    VALUES (?, ?, ?, ?)
+  `).run(chatId, role, content, toolCallsStr);
+  
+  db.prepare(`UPDATE consultant_chats SET updated_at = datetime('now') WHERE id = ?`).run(chatId);
+  return db.prepare(`SELECT * FROM consultant_messages WHERE id = ?`).get(res.lastInsertRowid);
+}
+
+function deleteConsultantChat(chatId) {
+  const db = getDb();
+  return db.prepare(`DELETE FROM consultant_chats WHERE id = ?`).run(chatId);
+}
+
 module.exports = {
   getDbPath,
   getDb,
@@ -1453,4 +1509,9 @@ module.exports = {
   getScheduleFirings,
   logJarvisRequest,
   getJarvisRequests,
+  getConsultantChats,
+  createConsultantChat,
+  getConsultantMessages,
+  addConsultantMessage,
+  deleteConsultantChat,
 };

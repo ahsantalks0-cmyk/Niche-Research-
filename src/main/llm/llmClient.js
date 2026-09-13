@@ -39,14 +39,12 @@ function getActiveConfig() {
   const providerId = settings.ai_provider || 'gemini';
   const modelId = settings.ai_model || (providerId === 'gemini' ? 'gemini-2.5-flash' : null);
 
-  // API key search order: per-provider setting -> environment -> gemini_api_key setting
-  let apiKey = settings[`ai_key_${providerId}`] || null;
-  if (!apiKey) {
-    if (providerId === 'gemini') apiKey = process.env.GEMINI_API_KEY || settings.gemini_api_key || null;
-    else if (providerId === 'openai') apiKey = process.env.OPENAI_API_KEY || null;
-    else if (providerId === 'anthropic') apiKey = process.env.ANTHROPIC_API_KEY || null;
-    else if (providerId === 'groq') apiKey = process.env.GROQ_API_KEY || null;
-  }
+  // API key search order: DB settings per provider -> environment variable
+  let apiKey = null;
+  if (providerId === 'gemini') apiKey = settings.gemini_api_key || settings.geminiApiKey || process.env.GEMINI_API_KEY || null;
+  else if (providerId === 'openai') apiKey = settings.openai_api_key || settings.openaiApiKey || process.env.OPENAI_API_KEY || null;
+  else if (providerId === 'anthropic') apiKey = settings.anthropic_api_key || settings.anthropicApiKey || process.env.ANTHROPIC_API_KEY || null;
+  else if (providerId === 'groq') apiKey = settings.groq_api_key || settings.groqApiKey || process.env.GROQ_API_KEY || null;
 
   return { providerId, modelId, apiKey };
 }

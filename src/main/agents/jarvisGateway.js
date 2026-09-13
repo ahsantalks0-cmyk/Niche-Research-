@@ -570,12 +570,7 @@ class JarvisGatewayAgent {
    * @returns {Promise<{ success: boolean, port: number, error?: string }>}
    */
   start(portOverride) {
-    return new Promise((resolve) => {
-      if (this.running && this.server) {
-        resolve({ success: true, port: this.port, running: true });
-        return;
-      }
-
+    return new Promise(async (resolve) => {
       const settings = db.getSettings() || {};
       let targetPort = this.port;
 
@@ -586,6 +581,14 @@ class JarvisGatewayAgent {
         if (portOverride.apiKey) this.customApiKey = String(portOverride.apiKey).trim();
       } else if (!targetPort || targetPort === DEFAULT_PORT) {
         targetPort = settings.jarvis_port || DEFAULT_PORT;
+      }
+
+      if (this.running && this.server) {
+        if (targetPort === this.port) {
+          resolve({ success: true, port: this.port, running: true });
+          return;
+        }
+        await this.stop();
       }
 
       this.port = targetPort;
