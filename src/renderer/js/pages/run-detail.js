@@ -23,19 +23,33 @@
     { key: 'qa', name: 'Phase 4: QA & Reporting', layer: 'qa_reporting', desc: 'Dossier audit & handoff' },
   ];
 
+  function parseSafeDate(dateStr) {
+    if (!dateStr) return null;
+    if (dateStr.endsWith('Z') || dateStr.includes('+')) {
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    const formatted = dateStr.replace(' ', 'T') + (dateStr.endsWith('Z') ? '' : 'Z');
+    const parsed = new Date(formatted);
+    if (!isNaN(parsed.getTime())) return parsed;
+    const direct = new Date(dateStr);
+    return isNaN(direct.getTime()) ? null : direct;
+  }
+
   function formatTime(ts) {
     if (!ts) return '—';
-    const d = new Date(ts.replace(' ', 'T') + 'Z');
-    if (isNaN(d.getTime())) return ts;
+    const d = parseSafeDate(ts);
+    if (!d) return ts;
     return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }
 
   function formatElapsed(run) {
     if (!run || !run.created_at) return '0s';
-    const start = new Date(run.created_at.replace(' ', 'T') + 'Z').getTime();
-    const end = run.completed_at
-      ? new Date(run.completed_at.replace(' ', 'T') + 'Z').getTime()
-      : Date.now();
+    const startDate = parseSafeDate(run.created_at);
+    if (!startDate) return '0s';
+    const start = startDate.getTime();
+    const endDate = run.completed_at ? parseSafeDate(run.completed_at) : null;
+    const end = endDate ? endDate.getTime() : Date.now();
     const diffSec = Math.max(0, Math.floor((end - start) / 1000));
     if (diffSec < 60) return `${diffSec}s`;
     const mins = Math.floor(diffSec / 60);

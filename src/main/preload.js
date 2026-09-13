@@ -14,6 +14,7 @@ const VALID_EVENTS = new Set([
   'engine:run-status',
   'engine:agent-status',
   'engine:system-test-log',
+  'engine:browser-status',
 ]);
 
 /**
@@ -139,6 +140,8 @@ contextBridge.exposeInMainWorld('engineAPI', {
   onRateLimiterWait: (cb) => on('rate-limiter:wait', cb),
   onRunStatus: (cb) => on('engine:run-status', cb),
   onAgentStatus: (cb) => on('engine:agent-status', cb),
+  getBrowserStatus: () => ipcRenderer.invoke('engine:get-browser-status'),
+  onBrowserStatus: (cb) => on('engine:browser-status', cb),
 });
 
 contextBridge.exposeInMainWorld('llmAPI', {

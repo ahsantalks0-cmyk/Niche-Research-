@@ -47,6 +47,7 @@ function registerQualityRules(agentNumber, rulesSpec = {}) {
     depthMarkers: rulesSpec.depthMarkers || {},
     customCheck: typeof rulesSpec.customCheck === 'function' ? rulesSpec.customCheck : null,
     outputType: rulesSpec.outputType || 'analysis',
+    stage2Expectations: rulesSpec.stage2Expectations || '',
   });
 }
 
@@ -203,9 +204,20 @@ registerQualityRules(5, {
 registerQualityRules(6, {
   outputType: 'research',
   requiredFields: ['candidates_count', 'candidates'],
+  stage2Expectations: `Discovery stage expectations:
+1. Candidate niches must be plausible, specific, multi-word sub-niches (e.g. "budget raw feeding for senior dogs").
+2. Candidate niches must have real sources and be correctly annotated.
+3. IMPORTANT: Do NOT expect validated search volume, trend data, or competitor difficulty statistics at this stage, as those are researched by subsequent agents (Agent #7 Trend & Demand, and Agent #11 Core Validator). If the output contains plausible specific niches with clear seed evidence/grounding, it must PASS. Do NOT reject it for lacking detailed market statistics.`,
   customCheck: (rawOutput) => {
     const failedRules = [];
-    const output = rawOutput.discovery_result || rawOutput;
+    const output = rawOutput.discovery_result || rawOutput || {};
+    if (output.input_mode === 'own_niche') {
+      return {
+        passed: true,
+        failedRules: [],
+        feedback: 'Own niche mode validation bypassed.',
+      };
+    }
     const candidates = output.candidates || [];
 
     if (!Array.isArray(candidates) || candidates.length === 0) {
@@ -447,6 +459,12 @@ async function runStage2GeminiReview(agentNumber, output, context = {}, runId = 
   const registered = agentRulesRegistry.get(agentNumber);
   const outputType = registered?.outputType || 'analysis';
 
+  const normalizedOutput = output?.discovery_result || output || {};
+  if (agentNumber === 6 && normalizedOutput.input_mode === 'own_niche') {
+    emitLog('QS', '⏩ Stage 2 skipped — own_niche mode bypass', { runId, agentNumber });
+    return { verdict: 'skip', feedback: 'Stage 2 skipped — own_niche mode bypass' };
+  }
+
   if (outputType === 'config') {
     emitLog('QS', `⏩ Stage 2 skipped — config-type output (Stage 1: ${passedStage1Count}/${totalStage1Count} ✓)`, { runId, agentNumber });
     return { verdict: 'skip', feedback: `Stage 2 skipped — config-type output (Stage 1: ${passedStage1Count}/${totalStage1Count} ✓)` };
@@ -466,11 +484,15 @@ async function runStage2GeminiReview(agentNumber, output, context = {}, runId = 
   const agentName = agentDef?.name || `Agent #${agentNumber}`;
   const agentPurpose = agentDef?.desc || 'specialist research analysis';
 
+  const expectations = registered?.stage2Expectations 
+    ? `\nAGENT-SPECIFIC EVALUATION EXPECTATIONS FOR THIS STAGE:\n${registered.stage2Expectations}\n`
+    : '';
+
   try {
     const prompt = `You are the Quality Supervisor Agent reviewing an AI agent's output for an automated market research application.
 You are reviewing the output of ${agentName}, whose job is ${agentPurpose}.
 Evaluate whether THIS output fulfills THAT specific job with specific, grounded data — not whether it looks like generic market research.
-
+${expectations}
 Output snippet to evaluate:
 ${outputText.slice(0, 1500)}
 

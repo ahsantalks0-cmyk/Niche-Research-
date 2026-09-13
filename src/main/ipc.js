@@ -285,6 +285,10 @@ function registerEngineIpc(mainWindow) {
     return browserEngine.searchGoogle(params);
   });
 
+  ipcMain.handle('engine:get-browser-status', () => {
+    return browserEngine.getBrowserStatus();
+  });
+
   // Engine Test Harness (Part 7)
   ipcMain.handle('engine:run-test', async (_e, testName, args) => {
     switch (testName) {
@@ -376,6 +380,7 @@ function registerEngineIpc(mainWindow) {
   browserEngine.on('log', (entry) => sendToRenderer('engine:log', entry));
   browserEngine.on('captcha:detected', (data) => sendToRenderer('captcha:detected', data));
   browserEngine.on('captcha:resolved', (data) => sendToRenderer('captcha:resolved', data));
+  browserEngine.on('status:updated', (data) => sendToRenderer('engine:browser-status', data));
   slotPool.on('slots:updated', (data) => sendToRenderer('slots:updated', data));
   rateLimiter.on('wait', (data) => sendToRenderer('rate-limiter:wait', data));
   chainEngine.on('run:status', (data) => sendToRenderer('engine:run-status', data));

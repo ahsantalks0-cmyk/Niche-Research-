@@ -101,6 +101,35 @@
 
         <div class="ledger-strip">${kpiCells}</div>
 
+        <div class="panel" style="margin-top: 20px; margin-bottom: 20px;">
+          <div class="panel-head">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="led" id="browser-engine-led" style="background-color: var(--status-success, #10b981); width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 8px var(--status-success, #10b981);"></span>
+              <div>
+                <h3>Browser Harvesting Engine</h3>
+                <div class="ph-sub">Real-time telemetry of autonomous scraping and autocomplete proxies</div>
+              </div>
+            </div>
+            <span class="badge badge-active" style="background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); height: fit-content; align-self: center;">
+              <span class="bdot" style="background: #10b981;"></span>Active
+            </span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; padding: 16px 0 8px;">
+            <div style="background: var(--bg-card, rgba(255,255,255,0.02)); border: 1px solid var(--border-color, rgba(255,255,255,0.05)); padding: 12px 16px; border-radius: 6px;">
+              <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted, #9ca3af);">Active Scraping Workers</div>
+              <div id="browser-active-fetches" style="font-size: 24px; font-weight: 700; color: var(--text-main, #ffffff); margin-top: 4px; font-family: monospace;">0</div>
+            </div>
+            <div style="background: var(--bg-card, rgba(255,255,255,0.02)); border: 1px solid var(--border-color, rgba(255,255,255,0.05)); padding: 12px 16px; border-radius: 6px;">
+              <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted, #9ca3af);">Total Fetches Completed</div>
+              <div id="browser-total-fetches" style="font-size: 24px; font-weight: 700; color: var(--text-main, #ffffff); margin-top: 4px; font-family: monospace;">0</div>
+            </div>
+            <div style="background: var(--bg-card, rgba(255,255,255,0.02)); border: 1px solid var(--border-color, rgba(255,255,255,0.05)); padding: 12px 16px; border-radius: 6px;">
+              <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted, #9ca3af);">Scraping Cache Hit Rate</div>
+              <div id="browser-cache-hit-rate" style="font-size: 24px; font-weight: 700; color: var(--text-main, #ffffff); margin-top: 4px; font-family: monospace;">100%</div>
+            </div>
+          </div>
+        </div>
+
         <div class="dash-row">
           <div class="panel panel-hero">
             <div class="panel-head">
@@ -283,6 +312,43 @@
 
       buildCharts();
       this._unTheme = NRDTheme.onChange(buildCharts);
+
+      // Browser Engine Telemetry
+      const updateBrowserTelemetry = (status) => {
+        if (!status) return;
+        const activeNode = document.getElementById('browser-active-fetches');
+        const totalNode = document.getElementById('browser-total-fetches');
+        const rateNode = document.getElementById('browser-cache-hit-rate');
+        const ledNode = document.getElementById('browser-engine-led');
+
+        if (activeNode) activeNode.textContent = status.activeFetches || 0;
+        if (totalNode) totalNode.textContent = status.totalFetches || 0;
+        if (rateNode) {
+          const rate = status.cacheHitRate !== undefined ? Math.round(status.cacheHitRate * 100) : 100;
+          rateNode.textContent = `${rate}%`;
+        }
+        if (ledNode) {
+          if ((status.activeFetches || 0) > 0) {
+            ledNode.style.backgroundColor = '#fbbf24'; // Amber during active scrapers
+            ledNode.style.boxShadow = '0 0 8px #fbbf24';
+          } else {
+            ledNode.style.backgroundColor = '#10b981'; // Green during idle
+            ledNode.style.boxShadow = '0 0 8px #10b981';
+          }
+        }
+      };
+
+      if (window.engineAPI && typeof window.engineAPI.getBrowserStatus === 'function') {
+        window.engineAPI.getBrowserStatus().then((status) => {
+          updateBrowserTelemetry(status);
+        }).catch(() => {});
+      }
+
+      if (window.engineAPI && typeof window.engineAPI.onBrowserStatus === 'function') {
+        this._unsubBrowserStatus = window.engineAPI.onBrowserStatus((status) => {
+          updateBrowserTelemetry(status);
+        });
+      }
     },
 
     _renderLegend() {
@@ -300,6 +366,7 @@
 
     destroy() {
       if (this._unTheme) this._unTheme();
+      if (this._unsubBrowserStatus) this._unsubBrowserStatus();
       (this._charts || []).forEach((c) => { try { c.destroy(); } catch { /* noop */ } });
       this._charts = [];
     },

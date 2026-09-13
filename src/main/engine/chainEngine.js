@@ -53,6 +53,58 @@ class ChainEngine extends EventEmitter {
      */
     this.activeRuns = new Map();
     this.browserEngine = null;
+    this.startWatchdog();
+  }
+
+  startWatchdog() {
+    this.watchdogInterval = setInterval(() => {
+      try {
+        this.runWatchdogCheck();
+      } catch (err) {
+        console.error('Error in Run Watchdog:', err);
+      }
+    }, 15000); // Check every 15 seconds
+    if (this.watchdogInterval.unref) {
+      this.watchdogInterval.unref();
+    }
+  }
+
+  runWatchdogCheck() {
+    const dbInstance = db.getDb();
+    if (!dbInstance) return;
+
+    // Any run that is actively processing but has not updated for > 10 minutes (600s) is considered stuck.
+    const stuckRuns = dbInstance.prepare(`
+      SELECT id, status, updated_at, run_name
+      FROM research_runs
+      WHERE status NOT IN ('completed', 'failed', 'cancelled', 'awaiting_approval', 'paused')
+        AND (strftime('%s', 'now') - strftime('%s', updated_at)) > 600
+    `).all();
+
+    for (const run of stuckRuns) {
+      const runId = run.id;
+      const msg = `Run Watchdog: Run #${runId} ("${run.run_name}") was stuck in "${run.status}" state for >10 minutes. Forcing to failed state.`;
+      console.warn(msg);
+      
+      dbInstance.prepare(`
+        UPDATE research_runs
+        SET status = 'failed', error_summary = 'Run Watchdog timeout: Execution exceeded 10-minute limit.', updated_at = datetime('now')
+        WHERE id = ?
+      `).run(runId);
+
+      dbInstance.prepare(`
+        UPDATE agent_status
+        SET status = 'failed', output_summary = 'Run Watchdog timeout: Run aborted due to 10-minute inactivity limit.', updated_at = datetime('now')
+        WHERE run_id = ? AND status IN ('running', 'pending', 'retrying')
+      `).run(runId);
+
+      emitLog('CHAIN', `⚠️ Run Watchdog: Run #${runId} aborted (stuck >10m in "${run.status}")`, { runId });
+      this.emitStatusUpdate(runId, 'failed');
+
+      if (this.activeRuns.has(runId)) {
+        this.activeRuns.delete(runId);
+      }
+    }
   }
 
   getBrowserEngine() {
@@ -459,13 +511,13 @@ class ChainEngine extends EventEmitter {
               return { sendBack: true, paused: true, reason: 'max_run_sendbacks' };
             }
 
-            // Check agent-level send-back count (max 2 send-backs per agent per run)
+            // Check agent-level send-back count (max 3 send-backs per agent per run)
             const agentSendbacks = dbInstance.prepare(`
               SELECT COUNT(*) as count FROM quality_reviews
               WHERE run_id = ? AND agent_number = ? AND verdict = 'send_back'
             `).get(runId, agentNum)?.count || 0;
 
-            if (agentSendbacks <= 2) {
+            if (agentSendbacks < 3) {
               reviewRound++;
               currentQsFeedback = qsReview.feedback;
 
@@ -473,7 +525,7 @@ class ChainEngine extends EventEmitter {
                 UPDATE agent_status 
                 SET status = 'retrying', output_summary = ?, updated_at = datetime('now')
                 WHERE run_id = ? AND agent_number = ?
-              `).run(`QS send-back round ${agentSendbacks}: ${qsReview.feedback}`, runId, agentNum);
+              `).run(`QS send-back round ${agentSendbacks + 1}: ${qsReview.feedback}`, runId, agentNum);
 
               this.emitAgentUpdate(runId, agentNum, 'retrying');
               await new Promise((r) => setTimeout(r, 200));
@@ -485,20 +537,31 @@ class ChainEngine extends EventEmitter {
 
           if (qsReview.verdict === 'escalated') {
             const finishedAt = new Date().toISOString();
+            const warningMsg = `⚠️ Escalation cap reached (3 send-backs) for Agent #${agentNum}. Saving intermediate results as "best available" and proceeding.`;
+            engine.log('warn', warningMsg);
+            emitLog('AGENT', warningMsg, { runId, agentNumber: agentNum });
+
             dbInstance.prepare(`
               UPDATE agent_status 
-              SET status = 'failed', finished_at = ?, output_summary = ?, updated_at = datetime('now')
+              SET status = 'done', 
+                  finished_at = ?, 
+                  output_summary = ?, 
+                  output_payload = ?,
+                  updated_at = datetime('now')
               WHERE run_id = ? AND agent_number = ?
-            `).run(finishedAt, `QS escalated after 2 send-backs: ${qsReview.feedback}`, runId, agentNum);
+            `).run(
+              finishedAt, 
+              `QS Escalated (saving best available): ${qsReview.feedback}`, 
+              typeof result === 'object' ? JSON.stringify(result) : String(result),
+              runId, 
+              agentNum
+            );
 
-            this.emitAgentUpdate(runId, agentNum, 'failed');
+            this.emitAgentUpdate(runId, agentNum, 'done');
+            emitLog('AGENT', `✅ Agent #${agentNum} (${regAgent.name}) done (escalated best available)`, { runId, agentNumber: agentNum });
 
-            if (isCritical || regAgent.meta?.isCritical) {
-              throw new Error(`Critical Agent #${agentNum} (${agentSpec.name}) escalated by Quality Supervisor: ${qsReview.feedback}`);
-            } else {
-              engine.log('warn', `⚠️ Non-critical Agent #${agentNum} escalated by QS. Proceeding with remaining chain.`);
-              return { failed: true, escalated: true, error: qsReview.feedback };
-            }
+            // Proceed with the chain instead of throwing
+            break;
           }
         }
       }
@@ -711,17 +774,31 @@ class ChainEngine extends EventEmitter {
     const engine = this.getBrowserEngine();
     const recovered = [];
 
-    // Look for runs left in active intermediate states ('discovery', 'deep_research', 'scoring', 'qa_reporting')
+    // Look for runs left in active intermediate states or planning ('planning', 'discovery', 'deep_research', 'scoring', 'qa_reporting', 'qa', 'reporting')
     const interruptedRuns = dbInstance.prepare(`
-      SELECT id, status, chain_state 
+      SELECT id, status 
       FROM research_runs 
-      WHERE status IN ('discovery', 'deep_research', 'scoring', 'qa_reporting')
+      WHERE status IN ('planning', 'discovery', 'deep_research', 'scoring', 'qa', 'reporting')
     `).all();
 
     for (const run of interruptedRuns) {
-      engine.log('warn', `🔄 Chain Engine: Run #${run.id} was interrupted during '${run.status}' by app restart. Resetting to paused/planning state.`);
-      dbInstance.prepare(`UPDATE research_runs SET status = 'planning', updated_at = datetime('now') WHERE id = ?`).run(run.id);
-      recovered.push({ runId: run.id, previousStatus: run.status, resetTo: 'planning' });
+      engine.log('warn', `🔄 Chain Engine Startup Sweep: Run #${run.id} was found in '${run.status}' state from a previous session. Sweeping to 'failed'.`);
+      
+      dbInstance.prepare(`
+        UPDATE research_runs 
+        SET status = 'failed', 
+            error_summary = 'App restarted while run was in progress/planning state.', 
+            updated_at = datetime('now') 
+        WHERE id = ?
+      `).run(run.id);
+
+      dbInstance.prepare(`
+        UPDATE agent_status
+        SET status = 'failed', output_summary = 'App restarted while agent was in progress/pending.', updated_at = datetime('now')
+        WHERE run_id = ? AND status IN ('running', 'pending', 'retrying')
+      `).run(run.id);
+
+      recovered.push({ runId: run.id, previousStatus: run.status, resetTo: 'failed' });
     }
 
     // Runs in 'awaiting_approval' remain intact and ready for user action

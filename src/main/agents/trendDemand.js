@@ -41,21 +41,53 @@ class TrendDemandAgent {
    * Fetches Google Trends interest timeline & metrics for a niche term in a given country.
    */
   async fetchTrendsData(nicheTerm, countryCode = 'US') {
+    const { browserEngine } = require('../engine/browser');
+    const { engineCache } = require('../engine/cache');
+    const { rateLimiter } = require('../engine/rate-limiter');
+    const human = require('../engine/human');
+
+    const cacheKey = `trends:${nicheTerm}`;
+    let rawCc = countryCode;
+    if (rawCc && typeof rawCc === 'object') {
+      rawCc = rawCc.country_code || rawCc.code || rawCc.name || 'US';
+    }
+    const cc = String(rawCc || 'US').toUpperCase();
+
+    // Cache check
+    const cached = engineCache.get(cacheKey, cc);
+    if (cached && cached.hasData) {
+      browserEngine.recordCacheHit();
+      return cached;
+    }
+
+    browserEngine.recordCacheMiss();
+
     try {
-      const geo = (countryCode || 'US').toUpperCase();
+      const geo = cc;
       const reqObj = {
         comparisonItem: [{ keyword: nicheTerm, geo, time: 'today 12-m' }],
         category: 0,
         property: '',
       };
+      
+      // Acquire rate limit
+      await rateLimiter.acquire('google.com', { taskRef: `trends:${nicheTerm}` });
+      await human.sleep(500 + Math.random() * 500);
+
       const exploreUrl = `https://trends.google.com/trends/api/explore?hl=en-US&tz=-300&req=${encodeURIComponent(JSON.stringify(reqObj))}&tz=-300`;
 
-      const res = await fetch(exploreUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept-Language': 'en-US,en;q=0.9',
-        },
-      });
+      browserEngine.incrementActiveFetch();
+      let res;
+      try {
+        res = await fetch(exploreUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        });
+      } finally {
+        browserEngine.decrementActiveFetch();
+      }
 
       if (!res.ok) {
         return { hasData: false, reason: `HTTP ${res.status}` };
@@ -74,14 +106,24 @@ class TrendDemandAgent {
         return { hasData: false, reason: 'No timeseries widget token found' };
       }
 
+      // Second request (widget multiline data)
+      await rateLimiter.acquire('google.com', { taskRef: `trends_widget:${nicheTerm}` });
+      await human.sleep(300 + Math.random() * 300);
+
       const widgetUrl = `https://trends.google.com/trends/api/widgetdata/multiline?hl=en-US&tz=-300&req=${encodeURIComponent(JSON.stringify(timeseriesWidget.request))}&token=${encodeURIComponent(timeseriesWidget.token)}&tz=-300`;
 
-      const widgetRes = await fetch(widgetUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept-Language': 'en-US,en;q=0.9',
-        },
-      });
+      browserEngine.incrementActiveFetch();
+      let widgetRes;
+      try {
+        widgetRes = await fetch(widgetUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        });
+      } finally {
+        browserEngine.decrementActiveFetch();
+      }
 
       if (!widgetRes.ok) {
         return { hasData: false, reason: `Widget HTTP ${widgetRes.status}` };
@@ -117,7 +159,7 @@ class TrendDemandAgent {
         seasonalityNote = `Seasonal — peak interest (${maxVal}/100) around ${peakDates.slice(0, 30)}`;
       }
 
-      return {
+      const out = {
         hasData: true,
         interest_avg: Math.round(avg * 10) / 10,
         direction_delta,
@@ -125,6 +167,15 @@ class TrendDemandAgent {
         points,
         values,
       };
+
+      // Cache it
+      engineCache.set({
+        keyword: cacheKey,
+        countryCode: cc,
+        data: out,
+      });
+
+      return out;
     } catch (err) {
       return { hasData: false, reason: err.message };
     }
@@ -134,8 +185,18 @@ class TrendDemandAgent {
    * Fetches Google Autocomplete demand proxy suggestions.
    */
   async fetchAutocompleteProxy(nicheTerm, countryCode = 'US') {
+    const { browserEngine } = require('../engine/browser');
+    const { engineCache } = require('../engine/cache');
+    const { rateLimiter } = require('../engine/rate-limiter');
+    const human = require('../engine/human');
+
     try {
-      const gl = (countryCode || 'US').toLowerCase();
+      let rawCc = countryCode;
+      if (rawCc && typeof rawCc === 'object') {
+        rawCc = rawCc.country_code || rawCc.code || rawCc.name || 'US';
+      }
+      const cc = String(rawCc || 'US').toUpperCase();
+      const gl = cc.toLowerCase();
       const queries = [
         nicheTerm,
         `best ${nicheTerm}`,
@@ -146,13 +207,50 @@ class TrendDemandAgent {
       const allSuggestions = new Set();
 
       for (const q of queries) {
+        const cacheKey = `autocomplete:${q}`;
+        const cached = engineCache.get(cacheKey, cc);
+        if (cached && cached.suggestions) {
+          browserEngine.recordCacheHit();
+          if (Array.isArray(cached.suggestions)) {
+            cached.suggestions.forEach((s) => allSuggestions.add(s));
+          }
+          continue;
+        }
+
+        // Cache miss
+        browserEngine.recordCacheMiss();
+        
+        // Rate limiter
+        const rl = await rateLimiter.acquire('google.com', { taskRef: `autocomplete:${q}` });
+        if (rl.waitedMs > 0) {
+          emitLog('RATE LIMIT', `⏳ Rate limiter wait: ${Math.round(rl.waitedMs)}ms for google.com`, { category: 'RATE LIMIT' });
+        }
+
+        // Human sleep
+        await human.sleep(500 + Math.random() * 500);
+
+        // Fetch
         const url = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(q)}&gl=${gl}`;
-        const res = await fetch(url, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-        });
-        if (res.ok) {
-          const data = await res.json();
+        
+        browserEngine.incrementActiveFetch();
+        let resp;
+        try {
+          resp = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
+        } finally {
+          browserEngine.decrementActiveFetch();
+        }
+
+        if (resp.ok) {
+          const data = await resp.json();
           const sugs = Array.isArray(data[1]) ? data[1] : [];
+          
+          // Cache suggestions
+          engineCache.set({
+            keyword: cacheKey,
+            countryCode: cc,
+            data: { suggestions: sugs }
+          });
+
           sugs.forEach((s) => allSuggestions.add(s));
         }
       }
@@ -162,7 +260,8 @@ class TrendDemandAgent {
         count: suggestionsList.length,
         suggestions: suggestionsList,
       };
-    } catch {
+    } catch (err) {
+      console.error('Error in fetchAutocompleteProxy:', err);
       return { count: 0, suggestions: [] };
     }
   }
@@ -382,6 +481,8 @@ Strictly follow these guidelines:
           let autoRes = null;
 
           if (useCache) {
+            const { browserEngine } = require('../engine/browser');
+            browserEngine.recordCacheHit();
             emitLog('AGENT', `📈 Cache hit: '${nicheName}' (${country}) evaluated <24h ago — loading cached signals`, { runId, nicheId: niche.id });
             
             let points = [];

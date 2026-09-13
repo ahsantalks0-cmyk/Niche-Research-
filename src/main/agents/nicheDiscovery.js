@@ -61,9 +61,15 @@ class NicheDiscoveryAgent {
   /**
    * Helper to collect Google Autocomplete seed signals for given business modes.
    * @param {Array<string>} businessModes
+   * @param {string} countryCode
    * @returns {Promise<Array<string>>}
    */
-  async collectWebSignals(businessModes = ['blogging']) {
+  async collectWebSignals(businessModes = ['blogging'], countryCode = 'US') {
+    let rawCc = countryCode;
+    if (rawCc && typeof rawCc === 'object') {
+      rawCc = rawCc.country_code || rawCc.code || rawCc.name || 'US';
+    }
+    const cc = String(rawCc || 'US').toUpperCase();
     const signals = [];
     const seedTemplates = {
       blogging: ['best * for', 'how to * at home', 'guide to * for beginners'],
@@ -80,37 +86,89 @@ class NicheDiscoveryAgent {
       }
     }
 
-    // Fetch Google autocomplete suggestions
+    const { browserEngine } = require('../engine/browser');
+    const { engineCache } = require('../engine/cache');
+    const { rateLimiter } = require('../engine/rate-limiter');
+    const human = require('../engine/human');
+
+    // Fetch Google autocomplete suggestions via P0.5 infrastructure
     for (const q of queriesToFetch.slice(0, 6)) {
+      const t0 = Date.now();
+      const cacheKey = `autocomplete:${q}`;
+
       try {
-        const url = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(q)}`;
-        if (typeof fetch === 'function') {
-          const resp = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
-          if (resp.ok) {
-            const data = await resp.json();
-            if (Array.isArray(data) && Array.isArray(data[1])) {
-              for (const item of data[1].slice(0, 4)) {
-                if (typeof item === 'string' && item.length > 5) {
-                  signals.push(item.toLowerCase());
-                }
-              }
+        // 1. Page Cache check
+        const cached = engineCache.get(cacheKey, cc);
+        if (cached && cached.suggestions) {
+          const durationMs = Date.now() - t0;
+          browserEngine.recordCacheHit();
+          emitLog('CACHE', `⚡ CACHE HIT: "Autocomplete query: ${q}" [${cc}] — fetch avoided!`, { category: 'CACHE' });
+          emitLog('BROWSER', `🌍 FETCH (cached) [suggestqueries.google.com]: "${q}" completed in ${durationMs}ms`, { category: 'BROWSER' });
+          
+          if (Array.isArray(cached.suggestions)) {
+            for (const item of cached.suggestions) {
+              signals.push(item);
+            }
+          }
+          continue;
+        }
+
+        // Cache miss
+        browserEngine.recordCacheMiss();
+        emitLog('BROWSER', `Cache miss: Autocomplete query "${q}" [${cc}]. Acquiring rate limiter...`, { category: 'BROWSER' });
+        
+        // 2. Acquire permission from process-wide rate limiter
+        const rl = await rateLimiter.acquire('google.com', { taskRef: `autocomplete:${q}` });
+        if (rl.waitedMs > 0) {
+          emitLog('RATE LIMIT', `⏳ Rate limiter wait: ${Math.round(rl.waitedMs)}ms for google.com`, { category: 'RATE LIMIT' });
+        }
+
+        // 3. Human delay
+        await human.sleep(500 + Math.random() * 500);
+
+        // 4. Real fetch
+        const url = `https://suggestqueries.google.com/complete/search?client=chrome&q=${encodeURIComponent(q)}&gl=${cc.toLowerCase()}`;
+        
+        browserEngine.incrementActiveFetch();
+        let resp;
+        try {
+          resp = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } });
+        } finally {
+          browserEngine.decrementActiveFetch();
+        }
+
+        const durationMs = Date.now() - t0;
+
+        if (!resp.ok) {
+          throw new Error(`suggestqueries fetch failed with status [${resp.status}]`);
+        }
+
+        const data = await resp.json();
+        const parsedItems = [];
+        if (Array.isArray(data) && Array.isArray(data[1])) {
+          for (const item of data[1].slice(0, 4)) {
+            if (typeof item === 'string' && item.length > 5) {
+              parsedItems.push(item.toLowerCase());
             }
           }
         }
-      } catch {
-        // Fallback seed signals if network autocomplete is offline
-      }
-    }
 
-    // Fallback seed signals if none retrieved
-    if (signals.length === 0) {
-      signals.push(
-        'budget raw feeding for senior dogs',
-        'notion templates for freelance graphic designers',
-        'ergonomic home office accessories under $50',
-        'eco friendly travel gear for solo female travelers',
-        'smart home automation for apartment renters'
-      );
+        emitLog('BROWSER', `🌍 FETCH [suggestqueries.google.com] for query "${q}" completed in ${durationMs}ms with status ${resp.status}`, { category: 'BROWSER' });
+
+        // Save to cache
+        engineCache.set({
+          keyword: cacheKey,
+          countryCode: cc,
+          data: { suggestions: parsedItems }
+        });
+
+        for (const item of parsedItems) {
+          signals.push(item);
+        }
+
+      } catch (err) {
+        emitLog('BROWSER', `⚠️ Autocomplete fetch failed for "${q}": ${err.message}`, { category: 'BROWSER' });
+      }
     }
 
     return Array.from(new Set(signals));
@@ -216,7 +274,7 @@ class NicheDiscoveryAgent {
       emitLog('DISCOVERY', `⚡ Discovery Mode: Collecting web signals for ${businessModes.join(', ')} across ${countries.join(', ')}`, { runId });
 
       // Step 1: Web Signals
-      const webSignals = await this.collectWebSignals(businessModes);
+      const webSignals = await this.collectWebSignals(businessModes, countries[0]);
       emitLog('DISCOVERY', `📡 Web Signals: Collected ${webSignals.length} Google autocomplete signals`, { runId });
 
       // Step 2: AI Expansion via configured LLM
@@ -352,6 +410,7 @@ STRICT RULES:
 
     const resultPayload = {
       run_id: runId,
+      input_mode: inputMode,
       candidates_count: insertedRows.length,
       candidates: insertedRows,
       summary: `Discovered ${insertedRows.length} grounded candidate niches for Run #${runId}`,

@@ -13,10 +13,23 @@
   let filterStatus = 'all';
   let searchQuery = '';
 
+  function parseSafeDate(dateStr) {
+    if (!dateStr) return null;
+    if (dateStr.endsWith('Z') || dateStr.includes('+')) {
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    const formatted = dateStr.replace(' ', 'T') + (dateStr.endsWith('Z') ? '' : 'Z');
+    const parsed = new Date(formatted);
+    if (!isNaN(parsed.getTime())) return parsed;
+    const direct = new Date(dateStr);
+    return isNaN(direct.getTime()) ? null : direct;
+  }
+
   function formatTimeAgo(dateStr) {
     if (!dateStr) return 'Just now';
-    const d = new Date(dateStr.replace(' ', 'T') + 'Z');
-    if (isNaN(d.getTime())) return dateStr;
+    const d = parseSafeDate(dateStr);
+    if (!d) return dateStr;
     const now = new Date();
     const sec = Math.floor((now.getTime() - d.getTime()) / 1000);
     if (sec < 60) return `${Math.max(0, sec)}s ago`;
@@ -26,11 +39,12 @@
   }
 
   function formatElapsed(run) {
-    if (!run.created_at) return '0s';
-    const start = new Date(run.created_at.replace(' ', 'T') + 'Z').getTime();
-    const end = run.completed_at
-      ? new Date(run.completed_at.replace(' ', 'T') + 'Z').getTime()
-      : Date.now();
+    if (!run || !run.created_at) return '0s';
+    const startDate = parseSafeDate(run.created_at);
+    if (!startDate) return '0s';
+    const start = startDate.getTime();
+    const endDate = run.completed_at ? parseSafeDate(run.completed_at) : null;
+    const end = endDate ? endDate.getTime() : Date.now();
     const diffSec = Math.max(0, Math.floor((end - start) / 1000));
     if (diffSec < 60) return `${diffSec}s`;
     const mins = Math.floor(diffSec / 60);

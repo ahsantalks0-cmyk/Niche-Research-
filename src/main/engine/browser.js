@@ -40,7 +40,46 @@ class BrowserEngine extends EventEmitter {
     // Track active CAPTCHAs by slotId
     this.activeCaptchas = new Map();
 
+    // Browser Engine Status variables
+    this.activeFetches = 0;
+    this.totalFetches = 0;
+    this.cacheHits = 0;
+    this.cacheMisses = 0;
+
     this.initPaths();
+  }
+
+  getBrowserStatus() {
+    const hits = this.cacheHits || 0;
+    const misses = this.cacheMisses || 0;
+    const total = hits + misses;
+    const hitRate = total > 0 ? (hits / total) : 0;
+    return {
+      activeFetches: this.activeFetches || 0,
+      totalFetches: this.totalFetches || 0,
+      cacheHitRate: Math.round(hitRate * 100) / 100,
+    };
+  }
+
+  recordCacheHit() {
+    this.cacheHits = (this.cacheHits || 0) + 1;
+    this.emit('status:updated', this.getBrowserStatus());
+  }
+
+  recordCacheMiss() {
+    this.cacheMisses = (this.cacheMisses || 0) + 1;
+    this.totalFetches = (this.totalFetches || 0) + 1;
+    this.emit('status:updated', this.getBrowserStatus());
+  }
+
+  incrementActiveFetch() {
+    this.activeFetches = (this.activeFetches || 0) + 1;
+    this.emit('status:updated', this.getBrowserStatus());
+  }
+
+  decrementActiveFetch() {
+    this.activeFetches = Math.max(0, (this.activeFetches || 0) - 1);
+    this.emit('status:updated', this.getBrowserStatus());
   }
 
   initPaths() {
@@ -360,6 +399,7 @@ class BrowserEngine extends EventEmitter {
     // 1. Pillar 1: Shared Page/Data Cache Check
     const cached = engineCache.get(query, cc, niche);
     if (cached) {
+      this.recordCacheHit();
       const durationMs = Date.now() - t0;
       this.log('cache', `⚡ CACHE HIT: "${query}" [${cc}] (hit #${cached.hitCount}) — browser fetch avoided!`, {
         query,
@@ -390,6 +430,7 @@ class BrowserEngine extends EventEmitter {
       };
     }
 
+    this.recordCacheMiss();
     this.log('info', `Cache miss: "${query}" [${cc}]. Dispatching to Browser Slot Pool...`);
 
     // 2. Pillar 2: Enqueue to Browser Slot Pool for true parallel execution
@@ -402,8 +443,10 @@ class BrowserEngine extends EventEmitter {
         agentNumber,
       },
       async (slot) => {
-        let rateLimitWaitMs = 0;
-        let captchaEncountered = false;
+        this.incrementActiveFetch();
+        try {
+          let rateLimitWaitMs = 0;
+          let captchaEncountered = false;
 
         // Wrap with retry system (max 3 attempts, exponential backoff)
         let attempts = 0;
@@ -580,6 +623,9 @@ class BrowserEngine extends EventEmitter {
             const backoffMs = Math.pow(2, attempts) * 1000 + human.randomBetween(100, 400);
             await human.sleep(backoffMs);
           }
+        }
+        } finally {
+          this.decrementActiveFetch();
         }
       }
     );
