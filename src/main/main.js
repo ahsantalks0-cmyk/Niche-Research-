@@ -186,6 +186,19 @@ app.whenReady().then(() => {
     console.warn('[main] Could not initialize scheduler:', err.message);
   }
 
+  // Initialize Jarvis Gateway Agent (Agent #5 - P1.5)
+  try {
+    const dbSettings = db.getSettings();
+    if (dbSettings && dbSettings.jarvis_enabled) {
+      const { jarvisGateway } = require('./agents/jarvisGateway');
+      jarvisGateway.start(dbSettings.jarvis_port).catch((err) => {
+        console.warn('[main] Could not auto-start jarvis gateway:', err.message);
+      });
+    }
+  } catch (err) {
+    console.warn('[main] Could not check jarvis startup state:', err.message);
+  }
+
   // Silent update check ~2.5s after launch, so it never blocks first paint.
   setTimeout(() => updater.checkOnStart(), 2500);
 
@@ -214,6 +227,10 @@ app.on('before-quit', () => {
   try {
     const { scheduler } = require('./agents/scheduler');
     scheduler.stop();
+  } catch {}
+  try {
+    const { jarvisGateway } = require('./agents/jarvisGateway');
+    jarvisGateway.stop().catch(() => {});
   } catch {}
   browserEngine.close().catch(() => {});
 });

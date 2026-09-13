@@ -122,6 +122,52 @@ function registerDbIpc() {
     return await scheduler.tick();
   });
 
+  // Jarvis Gateway Agent (Agent #5 - P1.5)
+  ipcMain.handle('jarvis:getStatus', () => {
+    const { jarvisGateway } = require('./agents/jarvisGateway');
+    return jarvisGateway.getStatus();
+  });
+
+  ipcMain.handle('jarvis:start', async (_e, port) => {
+    const { jarvisGateway } = require('./agents/jarvisGateway');
+    return await jarvisGateway.start(port);
+  });
+
+  ipcMain.handle('jarvis:stop', async () => {
+    const { jarvisGateway } = require('./agents/jarvisGateway');
+    return await jarvisGateway.stop();
+  });
+
+  ipcMain.handle('jarvis:generateApiKey', () => {
+    const { jarvisGateway } = require('./agents/jarvisGateway');
+    return jarvisGateway.generateApiKey();
+  });
+
+  ipcMain.handle('jarvis:getRecentRequests', (_e, limit) => {
+    return db.getJarvisRequests(limit || 10);
+  });
+
+  ipcMain.handle('jarvis:saveConfig', async (_e, config) => {
+    const { jarvisGateway } = require('./agents/jarvisGateway');
+    const patch = {};
+    if (config.enabled !== undefined) patch.jarvis_enabled = config.enabled ? 1 : 0;
+    if (config.port !== undefined) patch.jarvis_port = parseInt(config.port, 10) || 47821;
+    if (config.apiKey !== undefined) patch.jarvis_api_key = config.apiKey.trim();
+
+    const updatedSettings = db.saveSettings(patch);
+
+    if (config.enabled) {
+      await jarvisGateway.start(patch.jarvis_port || updatedSettings.jarvis_port);
+    } else if (config.enabled === false) {
+      await jarvisGateway.stop();
+    }
+
+    return {
+      settings: updatedSettings,
+      status: jarvisGateway.getStatus(),
+    };
+  });
+
   // KPI & Health
   ipcMain.handle('db:getCounts', () => {
     return db.getCounts();

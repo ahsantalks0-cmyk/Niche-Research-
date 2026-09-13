@@ -160,3 +160,12 @@ contextBridge.exposeInMainWorld('schedulerAPI', {
   tick: () => ipcRenderer.invoke('scheduler:tick'),
 });
 
+contextBridge.exposeInMainWorld('jarvisAPI', {
+  getStatus: () => ipcRenderer.invoke('jarvis:getStatus'),
+  start: (port) => ipcRenderer.invoke('jarvis:start', port),
+  stop: () => ipcRenderer.invoke('jarvis:stop'),
+  saveConfig: (config) => ipcRenderer.invoke('jarvis:saveConfig', config),
+  generateApiKey: () => ipcRenderer.invoke('jarvis:generateApiKey'),
+  getRecentRequests: (limit) => ipcRenderer.invoke('jarvis:getRecentRequests', limit),
+});
+

@@ -177,6 +177,28 @@ registerQualityRules(4, {
   },
 });
 
+// Agent #5: Jarvis Gateway Agent (Agent #5)
+registerQualityRules(5, {
+  outputType: 'config',
+  requiredFields: ['status', 'gateway_status'],
+  customCheck: (rawOutput) => {
+    const failedRules = [];
+    const output = rawOutput.jarvis_result || rawOutput;
+    if (!output.gateway_status || typeof output.gateway_status !== 'object') {
+      failedRules.push({
+        rule: 'R2_SCHEMA_COMPLETENESS',
+        expected: 'valid gateway_status object',
+        actual: typeof output.gateway_status,
+      });
+    }
+    return {
+      passed: failedRules.length === 0,
+      failedRules,
+      feedback: failedRules.map((f) => `${f.rule}: expected ${f.expected}, got ${f.actual}`).join('; '),
+    };
+  },
+});
+
 /* ══════════════════════════════════════════════════════════════
    GENERIC QUALITY RULE CHECKERS (STAGE 1)
    ══════════════════════════════════════════════════════════════ */

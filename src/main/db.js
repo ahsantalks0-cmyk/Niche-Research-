@@ -17,6 +17,7 @@ const migrationV4 = require('./migrations/v4');
 const migrationV5 = require('./migrations/v5');
 const migrationV6 = require('./migrations/v6');
 const migrationV7 = require('./migrations/v7');
+const migrationV8 = require('./migrations/v8');
 
 const MIGRATIONS = [
   migrationV1,
@@ -26,6 +27,7 @@ const MIGRATIONS = [
   migrationV5,
   migrationV6,
   migrationV7,
+  migrationV8,
 ];
 
 let _db = null;
@@ -410,6 +412,10 @@ function saveSettings(patch = {}) {
     ai_model_invalid: 'ai_model_invalid',
     aiModelInvalidReason: 'ai_model_invalid_reason',
     ai_model_invalid_reason: 'ai_model_invalid_reason',
+    jarvisEnabled: 'jarvis_enabled',
+    jarvis_enabled: 'jarvis_enabled',
+    jarvisPort: 'jarvis_port',
+    jarvis_port: 'jarvis_port',
   };
 
   const fields = {};
@@ -1365,6 +1371,45 @@ function getScheduleFirings(scheduleId, limit = 10) {
   `).all(Number(scheduleId), limit);
 }
 
+/**
+ * Inserts a recorded incoming HTTP request to Jarvis Gateway into jarvis_requests.
+ * @param {object} data
+ * @returns {import('better-sqlite3').RunResult}
+ */
+function logJarvisRequest(data = {}) {
+  const db = getDb();
+  const stmt = db.prepare(`
+    INSERT INTO jarvis_requests (
+      method, path, status_code, key_valid, duration_ms, client_ip, request_payload, response_payload, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `);
+  return stmt.run(
+    data.method || 'GET',
+    data.path || '/',
+    data.statusCode || 200,
+    data.keyValid ? 1 : 0,
+    data.durationMs || 0,
+    data.clientIp || '127.0.0.1',
+    data.requestPayload ? (typeof data.requestPayload === 'string' ? data.requestPayload : JSON.stringify(data.requestPayload)) : '{}',
+    data.responsePayload ? (typeof data.responsePayload === 'string' ? data.responsePayload : JSON.stringify(data.responsePayload)) : null
+  );
+}
+
+/**
+ * Retrieves the most recent incoming Jarvis requests for UI & telemetry inspection.
+ * @param {number} [limit=10]
+ * @returns {Array<object>}
+ */
+function getJarvisRequests(limit = 10) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT id, method, path, status_code, key_valid, duration_ms, client_ip, request_payload, response_payload, created_at
+    FROM jarvis_requests
+    ORDER BY id DESC
+    LIMIT ?
+  `).all(limit);
+}
+
 module.exports = {
   getDbPath,
   getDb,
@@ -1406,4 +1451,6 @@ module.exports = {
   getSchedules,
   getSchedule,
   getScheduleFirings,
+  logJarvisRequest,
+  getJarvisRequests,
 };

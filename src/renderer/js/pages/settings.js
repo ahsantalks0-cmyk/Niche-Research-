@@ -145,18 +145,65 @@
                 </div>
               </div>
 
-              <!-- Jarvis API Key Field -->
-              <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px">
-                <div class="set-row" style="padding-bottom:6px">
+              <!-- ═══════════════ Jarvis Gateway Agent (Agent #5 - P1.5) ═══════════════ -->
+              <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:14px" id="panel-jarvis-gateway">
+                <div class="set-row" style="padding-bottom:8px">
                   <div style="flex:1">
-                    <div class="sr-title">Jarvis API Key</div>
-                    <div class="sr-desc">Orchestrates the Control layer and the Senior Consultant (stored in app_settings).</div>
+                    <div style="display:flex; align-items:center; gap:8px">
+                      <div class="sr-title" style="font-size:13.5px; font-weight:600; color:var(--text-1)">Jarvis Gateway Agent (Agent #5)</div>
+                      <span id="jarvis-status-chip" class="badge" style="font-size:10px; padding:2px 8px; background:rgba(255,255,255,0.08); color:var(--text-3)">○ Stopped</span>
+                    </div>
+                    <div class="sr-desc" style="margin-top:2px">
+                      External API Gateway and Companion App Orchestration bridge. Bound strictly to <code>127.0.0.1</code> with rate limiting and authenticated access.
+                    </div>
+                  </div>
+                  <label class="toggle" title="Enable/Disable Jarvis Gateway Server">
+                    <input type="checkbox" id="set-jarvis-enabled" />
+                    <span class="track"><span class="thumb"></span></span>
+                  </label>
+                </div>
+
+                <div style="display:grid; grid-template-columns:120px 1fr; gap:10px; margin-top:10px; margin-bottom:10px">
+                  <div>
+                    <label style="font-size:11px; color:var(--text-2); display:block; margin-bottom:4px">Gateway Port</label>
+                    <input class="input" id="set-jarvis-port" type="number" min="1024" max="65535" value="47821" style="width:100%; font-size:12px; font-family:monospace" />
+                  </div>
+                  <div>
+                    <label style="font-size:11px; color:var(--text-2); display:block; margin-bottom:4px">Secret Access Key (X-Jarvis-Key)</label>
+                    <div class="api-row" style="margin:0">
+                      <input class="input" id="key-jarvis" type="password" placeholder="sk_jarvis_…" style="font-family:monospace; font-size:12px" />
+                      <button class="btn btn-outline" id="btn-toggle-jarvis-key" type="button" style="font-size:11px">Show</button>
+                      <button class="btn btn-outline" id="btn-paste-jarvis" type="button" style="font-size:11px">Paste</button>
+                      <button class="btn btn-outline" id="btn-generate-jarvis" type="button" style="font-size:11px; color:var(--cu-soft)">⚡ Generate</button>
+                    </div>
                   </div>
                 </div>
-                <div class="api-row">
-                  <input class="input" id="key-jarvis" type="password" placeholder="Enter Jarvis key…" />
-                  <button class="btn btn-outline" id="btn-paste-jarvis" type="button">Paste</button>
-                  <button class="btn btn-cu" id="btn-save-jarvis" type="button">Save Jarvis Key</button>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px">
+                  <span id="jarvis-port-error" style="display:none; color:#f87171; font-size:11px">⚠️ Port is currently in use by another service.</span>
+                  <div style="margin-left:auto; display:flex; gap:8px">
+                    <button class="btn btn-cu" id="btn-save-jarvis" type="button" style="font-size:11.5px; padding:4px 14px">Save Jarvis Configuration</button>
+                  </div>
+                </div>
+
+                <!-- Developer Quick-Start & cURL Example -->
+                <div style="margin-top:12px; padding:10px 12px; background:var(--ink-950, #09090b); border:1px solid var(--line); border-radius:6px">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
+                    <span style="font-size:10.5px; font-weight:600; color:var(--text-2); text-transform:uppercase; letter-spacing:0.5px">Quick-Start Integration (cURL)</span>
+                    <button class="btn btn-ghost" id="btn-copy-jarvis-curl" type="button" style="padding:2px 6px; font-size:10.5px">📋 Copy cURL</button>
+                  </div>
+                  <pre id="jarvis-curl-preview" style="margin:0; font-size:11px; font-family:monospace; color:var(--text-cu, #c084fc); white-space:pre-wrap; word-break:break-all">curl -X GET http://127.0.0.1:47821/v1/ping -H "X-Jarvis-Key: sk_jarvis_..."</pre>
+                </div>
+
+                <!-- Mini Incoming Requests Log (Audit Trail) -->
+                <div style="margin-top:12px">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
+                    <span style="font-size:11px; font-weight:600; color:var(--text-2)">Recent Incoming Gateway Requests</span>
+                    <button class="btn btn-ghost" id="btn-refresh-jarvis-requests" type="button" style="padding:2px 6px; font-size:10.5px">Refresh</button>
+                  </div>
+                  <div id="jarvis-requests-list" style="max-height:120px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; font-size:11px">
+                    <div style="color:var(--text-dim); padding:4px 0">No incoming API requests received yet.</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -234,34 +281,87 @@
                   <div style="font-size:10px; color:var(--text-dim); margin-top:2px">Example: "0 9 * * 1-5" = Weekdays at 9:00 AM</div>
                 </div>
 
-                <!-- Run Config Parameters -->
+                <!-- Run Config Parameters Unified with New Research -->
                 <div style="border-top:1px solid var(--border); padding-top:10px; margin-top:10px; margin-bottom:12px">
-                  <div style="font-size:11px; font-weight:600; color:var(--text-2); margin-bottom:8px">Run Parameters:</div>
-                  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px">
+                  <div style="font-size:11px; font-weight:600; color:var(--text-2); margin-bottom:8px">Automated Commission Parameters:</div>
+                  
+                  <!-- Input Mode & Mode Specific Criteria -->
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px">
                     <div>
                       <label style="font-size:10.5px; color:var(--text-3); display:block; margin-bottom:2px">Input Mode</label>
-                      <select class="select" id="sched-input-mode" style="width:100%; font-size:11px">
-                        <option value="discovery">Discovery</option>
-                        <option value="own_niche">Own Niche</option>
-                        <option value="own_domain">Own Domain</option>
+                      <select class="select" id="sched-input-mode" style="width:100%; font-size:11.5px">
+                        <option value="discovery">Discovery (Autonomous Swarm)</option>
+                        <option value="own_niche">Own Niche (Target Validation)</option>
+                        <option value="own_domain">Own Domain (Domain Fit)</option>
                       </select>
                     </div>
                     <div>
-                      <label style="font-size:10.5px; color:var(--text-3); display:block; margin-bottom:2px">Target Market</label>
-                      <select class="select" id="sched-country" style="width:100%; font-size:11px">
-                        <option value="US">United States (US)</option>
-                        <option value="GB">United Kingdom (GB)</option>
-                        <option value="CA">Canada (CA)</option>
-                        <option value="AU">Australia (AU)</option>
-                        <option value="PK">Pakistan (PK)</option>
-                        <option value="DE">Germany (DE)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style="font-size:10.5px; color:var(--text-3); display:block; margin-bottom:2px">Niche Target</label>
-                      <input class="input" id="sched-niche-qty" type="number" min="1" max="10" value="1" style="width:100%; font-size:11px" />
+                      <label style="font-size:10.5px; color:var(--text-3); display:block; margin-bottom:2px">Niche Quantity Target</label>
+                      <input class="input" id="sched-niche-qty" type="number" min="1" max="10" value="1" style="width:100%; font-size:11.5px" />
                     </div>
                   </div>
+
+                  <!-- Conditional Mode Specific Inputs -->
+                  <div id="sched-mode-own-niche-box" style="display:none; margin-bottom:10px">
+                    <label style="font-size:10.5px; color:var(--text-3); display:block; margin-bottom:2px">Target Niche Name</label>
+                    <input class="input" id="sched-own-niche-name" placeholder="e.g. Mechanical Keyboards, Ergonomic Desks…" style="width:100%; font-size:11.5px" />
+                  </div>
+
+                  <div id="sched-mode-own-domain-box" style="display:none; margin-bottom:10px">
+                    <label style="font-size:10.5px; color:var(--text-3); display:block; margin-bottom:2px">Target Domain</label>
+                    <input class="input" id="sched-domain-input" placeholder="e.g. keychron.com, yourstore.io" style="width:100%; font-size:11.5px" />
+                  </div>
+
+                  <!-- Business Monetization Models (4 Multi-Select Cards) -->
+                  <div style="margin-bottom:10px">
+                    <label style="font-size:10.5px; color:var(--text-3); display:block; margin-bottom:4px">Monetization &amp; Business Models (At least 1 required)</label>
+                    <div class="biz-cards" id="sched-biz-cards-grid" style="display:grid; grid-template-columns:repeat(2, 1fr); gap:8px">
+                      <button class="biz-card selected" data-biz="blogging" type="button" style="text-align:left; padding:8px 10px">
+                        <div style="display:flex; align-items:center; gap:8px">
+                          <span style="font-size:16px">✍️</span>
+                          <div style="flex:1; min-width:0">
+                            <h5 style="margin:0; font-size:11.5px" class="text-truncate">Blogging / Ads</h5>
+                          </div>
+                          <span class="bc-check" style="font-size:10px">✓</span>
+                        </div>
+                      </button>
+                      <button class="biz-card selected" data-biz="affiliate" type="button" style="text-align:left; padding:8px 10px">
+                        <div style="display:flex; align-items:center; gap:8px">
+                          <span style="font-size:16px">🔗</span>
+                          <div style="flex:1; min-width:0">
+                            <h5 style="margin:0; font-size:11.5px" class="text-truncate">Affiliate</h5>
+                          </div>
+                          <span class="bc-check" style="font-size:10px">✓</span>
+                        </div>
+                      </button>
+                      <button class="biz-card selected" data-biz="ecommerce" type="button" style="text-align:left; padding:8px 10px">
+                        <div style="display:flex; align-items:center; gap:8px">
+                          <span style="font-size:16px">🛒</span>
+                          <div style="flex:1; min-width:0">
+                            <h5 style="margin:0; font-size:11.5px" class="text-truncate">E-commerce</h5>
+                          </div>
+                          <span class="bc-check" style="font-size:10px">✓</span>
+                        </div>
+                      </button>
+                      <button class="biz-card selected" data-biz="digital_products" type="button" style="text-align:left; padding:8px 10px">
+                        <div style="display:flex; align-items:center; gap:8px">
+                          <span style="font-size:16px">📱</span>
+                          <div style="flex:1; min-width:0">
+                            <h5 style="margin:0; font-size:11.5px" class="text-truncate">Digital Prod</h5>
+                          </div>
+                          <span class="bc-check" style="font-size:10px">✓</span>
+                        </div>
+                      </button>
+                    </div>
+                    <div id="sched-biz-error-msg" style="display:none; color:#f87171; font-size:10.5px; margin-top:4px">Please select at least one business model.</div>
+                  </div>
+
+                  <!-- Target Country Selection (Mount Reusable Country Selector) -->
+                  <div style="margin-bottom:10px">
+                    <label style="font-size:10.5px; color:var(--text-3); display:block; margin-bottom:4px">Target Country Intelligence</label>
+                    <div id="sched-country-mount" style="background:var(--ink-900, #121214); border:1px solid var(--line); border-radius:6px; padding:8px"></div>
+                  </div>
+
                   <div style="margin-top:8px; display:flex; align-items:center; gap:8px">
                     <label class="toggle" style="scale:0.8; transform-origin:left center">
                       <input type="checkbox" id="sched-auto-approve" checked />
@@ -858,31 +958,199 @@
         });
       }
 
-      // Jarvis paste & save
-      if (btnPasteJarvis) {
+      // Jarvis Gateway Agent (Agent #5 - P1.5) UI Controller
+      const setJarvisEnabled = document.getElementById('set-jarvis-enabled');
+      const setJarvisPort = document.getElementById('set-jarvis-port');
+      const btnToggleJarvisKey = document.getElementById('btn-toggle-jarvis-key');
+      const btnGenerateJarvis = document.getElementById('btn-generate-jarvis');
+      const btnCopyJarvisCurl = document.getElementById('btn-copy-jarvis-curl');
+      const jarvisStatusChip = document.getElementById('jarvis-status-chip');
+      const jarvisPortError = document.getElementById('jarvis-port-error');
+      const jarvisCurlPreview = document.getElementById('jarvis-curl-preview');
+      const jarvisRequestsList = document.getElementById('jarvis-requests-list');
+      const btnRefreshJarvisRequests = document.getElementById('btn-refresh-jarvis-requests');
+
+      const updateJarvisCurlPreview = () => {
+        if (!jarvisCurlPreview) return;
+        const port = setJarvisPort ? (parseInt(setJarvisPort.value, 10) || 47821) : 47821;
+        const key = keyJarvis && keyJarvis.value.trim() ? keyJarvis.value.trim() : 'sk_jarvis_...';
+        jarvisCurlPreview.textContent = `curl -X GET http://127.0.0.1:${port}/v1/ping \\\n  -H "X-Jarvis-Key: ${key}"`;
+      };
+
+      const updateJarvisStatusUI = (status = {}) => {
+        if (!jarvisStatusChip) return;
+        const port = status.port || (setJarvisPort ? parseInt(setJarvisPort.value, 10) : 47821) || 47821;
+
+        if (status.running) {
+          jarvisStatusChip.className = 'badge badge-active';
+          jarvisStatusChip.style.background = 'rgba(34,197,94,0.15)';
+          jarvisStatusChip.style.color = '#4ade80';
+          jarvisStatusChip.innerHTML = `● Running on 127.0.0.1:${port}`;
+          if (jarvisPortError) jarvisPortError.style.display = 'none';
+        } else if (status.portBusy) {
+          jarvisStatusChip.className = 'badge';
+          jarvisStatusChip.style.background = 'rgba(239,68,68,0.15)';
+          jarvisStatusChip.style.color = '#f87171';
+          jarvisStatusChip.innerHTML = `⚠️ Port ${port} Busy`;
+          if (jarvisPortError) {
+            jarvisPortError.style.display = 'block';
+            jarvisPortError.textContent = `⚠️ Port ${port} is currently in use by another process.`;
+          }
+        } else {
+          jarvisStatusChip.className = 'badge';
+          jarvisStatusChip.style.background = 'rgba(255,255,255,0.08)';
+          jarvisStatusChip.style.color = 'var(--text-3)';
+          jarvisStatusChip.innerHTML = '○ Stopped';
+          if (jarvisPortError) jarvisPortError.style.display = 'none';
+        }
+
+        if (setJarvisEnabled && status.enabled !== undefined) {
+          setJarvisEnabled.checked = Boolean(status.enabled);
+        }
+        if (setJarvisPort && status.port) {
+          setJarvisPort.value = status.port;
+        }
+        updateJarvisCurlPreview();
+      };
+
+      const loadJarvisRequests = async () => {
+        if (!jarvisRequestsList || !window.jarvisAPI || !window.jarvisAPI.getRecentRequests) return;
+        try {
+          const reqs = await window.jarvisAPI.getRecentRequests(10);
+          if (!Array.isArray(reqs) || reqs.length === 0) {
+            jarvisRequestsList.innerHTML = `<div style="color:var(--text-dim); padding:4px 0">No incoming API requests received yet.</div>`;
+            return;
+          }
+
+          jarvisRequestsList.innerHTML = reqs.map((r) => {
+            const isOk = r.status_code >= 200 && r.status_code < 300;
+            const isWarn = r.status_code >= 400 && r.status_code < 500;
+            const color = isOk ? '#4ade80' : isWarn ? '#fbbf24' : '#f87171';
+            const bg = isOk ? 'rgba(34,197,94,0.12)' : isWarn ? 'rgba(245,158,11,0.12)' : 'rgba(239,68,68,0.12)';
+            const methodBg = r.method === 'POST' ? 'rgba(147,51,234,0.2)' : 'rgba(59,130,246,0.15)';
+            const methodColor = r.method === 'POST' ? '#c084fc' : '#60a5fa';
+
+            return `
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 8px; background:var(--ink-950, #09090b); border:1px solid var(--border); border-radius:4px; font-size:10.5px">
+                <div style="display:flex; align-items:center; gap:6px">
+                  <span style="background:${methodBg}; color:${methodColor}; font-weight:600; padding:1px 5px; border-radius:3px; font-size:9.5px">${r.method}</span>
+                  <span style="font-family:monospace; color:var(--text-1)">${escapeHtml(r.path)}</span>
+                  <span style="background:${bg}; color:${color}; font-weight:600; padding:1px 5px; border-radius:3px; font-size:9.5px">${r.status_code}</span>
+                  <span style="color:var(--text-3); font-size:9.5px">${r.duration_ms || 0}ms</span>
+                </div>
+                <span style="color:var(--text-dim); font-size:9.5px">${r.created_at ? new Date(r.created_at).toLocaleTimeString() : ''}</span>
+              </div>
+            `;
+          }).join('');
+        } catch (err) {
+          console.warn('[jarvis] Failed to load request log:', err.message);
+        }
+      };
+
+      if (btnToggleJarvisKey && keyJarvis) {
+        btnToggleJarvisKey.addEventListener('click', () => {
+          if (keyJarvis.type === 'password') {
+            keyJarvis.type = 'text';
+            btnToggleJarvisKey.textContent = 'Hide';
+          } else {
+            keyJarvis.type = 'password';
+            btnToggleJarvisKey.textContent = 'Show';
+          }
+        });
+      }
+
+      if (btnGenerateJarvis && keyJarvis) {
+        btnGenerateJarvis.addEventListener('click', async () => {
+          if (window.jarvisAPI && window.jarvisAPI.generateApiKey) {
+            const newKey = await window.jarvisAPI.generateApiKey();
+            keyJarvis.value = newKey;
+            updateJarvisCurlPreview();
+            NRDToast.show({ type: 'info', title: 'New Key Generated', msg: 'Remember to save configuration to persist.' });
+          }
+        });
+      }
+
+      if (btnPasteJarvis && keyJarvis) {
         btnPasteJarvis.addEventListener('click', async () => {
           try {
             const txt = await navigator.clipboard.readText();
-            if (txt) keyJarvis.value = txt.trim();
+            if (txt) {
+              keyJarvis.value = txt.trim();
+              updateJarvisCurlPreview();
+            }
           } catch {
             NRDToast.show({ type: 'warning', title: 'Clipboard unavailable', msg: 'Please paste manually into the field.' });
           }
         });
       }
 
-      if (btnSaveJarvis) {
-        btnSaveJarvis.addEventListener('click', async () => {
-          if (!window.dbAPI) return;
-          btnSaveJarvis.disabled = true;
+      if (btnCopyJarvisCurl && jarvisCurlPreview) {
+        btnCopyJarvisCurl.addEventListener('click', async () => {
           try {
-            await window.dbAPI.saveSettings({ jarvisApiKey: keyJarvis.value.trim() });
-            NRDToast.show({ type: 'success', title: 'Jarvis Key Saved', msg: 'Persisted into SQLite app_settings.' });
-          } catch (err) {
-            NRDToast.show({ type: 'error', title: 'Save failed', msg: err.message });
-          } finally {
-            btnSaveJarvis.disabled = false;
+            await navigator.clipboard.writeText(jarvisCurlPreview.textContent);
+            NRDToast.show({ type: 'success', title: 'Copied to Clipboard', msg: 'cURL command copied.' });
+          } catch {
+            NRDToast.show({ type: 'warning', title: 'Clipboard unavailable', msg: 'Select and copy text manually.' });
           }
         });
+      }
+
+      if (keyJarvis) {
+        keyJarvis.addEventListener('input', updateJarvisCurlPreview);
+      }
+      if (setJarvisPort) {
+        setJarvisPort.addEventListener('input', updateJarvisCurlPreview);
+      }
+
+      if (btnRefreshJarvisRequests) {
+        btnRefreshJarvisRequests.addEventListener('click', loadJarvisRequests);
+      }
+
+      const saveJarvisConfigHandler = async () => {
+        if (!window.jarvisAPI) return;
+        if (btnSaveJarvis) {
+          btnSaveJarvis.disabled = true;
+          btnSaveJarvis.textContent = 'Saving…';
+        }
+
+        try {
+          const enabled = setJarvisEnabled ? setJarvisEnabled.checked : false;
+          const port = setJarvisPort ? (parseInt(setJarvisPort.value, 10) || 47821) : 47821;
+          const apiKey = keyJarvis ? keyJarvis.value.trim() : '';
+
+          const res = await window.jarvisAPI.saveConfig({ enabled, port, apiKey });
+          updateJarvisStatusUI(res.status);
+          loadJarvisRequests();
+
+          NRDToast.show({
+            type: 'success',
+            title: 'Jarvis Gateway Config Saved',
+            msg: enabled ? `Gateway active on 127.0.0.1:${port}` : 'Gateway disabled and stopped.',
+          });
+        } catch (err) {
+          NRDToast.show({ type: 'error', title: 'Save Failed', msg: err.message });
+        } finally {
+          if (btnSaveJarvis) {
+            btnSaveJarvis.disabled = false;
+            btnSaveJarvis.textContent = 'Save Jarvis Configuration';
+          }
+        }
+      };
+
+      if (btnSaveJarvis) {
+        btnSaveJarvis.addEventListener('click', saveJarvisConfigHandler);
+      }
+
+      if (setJarvisEnabled) {
+        setJarvisEnabled.addEventListener('change', saveJarvisConfigHandler);
+      }
+
+      // Initial status load
+      if (window.jarvisAPI && window.jarvisAPI.getStatus) {
+        window.jarvisAPI.getStatus().then((status) => {
+          updateJarvisStatusUI(status);
+          loadJarvisRequests();
+        }).catch(() => {});
       }
 
       /* Load initial values from SQLite app_settings */
@@ -1259,9 +1527,16 @@
       const schedDowSelect = document.getElementById('sched-dow');
       const schedTimeWeeklyInput = document.getElementById('sched-time-weekly');
       const schedCronInput = document.getElementById('sched-cron');
+      
       const schedInputModeSelect = document.getElementById('sched-input-mode');
-      const schedCountrySelect = document.getElementById('sched-country');
       const schedNicheQtyInput = document.getElementById('sched-niche-qty');
+      const schedOwnNicheBox = document.getElementById('sched-mode-own-niche-box');
+      const schedOwnNicheName = document.getElementById('sched-own-niche-name');
+      const schedOwnDomainBox = document.getElementById('sched-mode-own-domain-box');
+      const schedDomainInput = document.getElementById('sched-domain-input');
+      const schedBizCardsGrid = document.getElementById('sched-biz-cards-grid');
+      const schedBizErrorMsg = document.getElementById('sched-biz-error-msg');
+      const schedCountryMount = document.getElementById('sched-country-mount');
       const schedAutoApproveInput = document.getElementById('sched-auto-approve');
 
       const schedOptInterval = document.getElementById('sched-opt-interval');
@@ -1270,6 +1545,61 @@
       const schedOptCron = document.getElementById('sched-opt-cron');
 
       let currentSchedulesList = [];
+      let schedSelectedBizModes = new Set(['blogging', 'affiliate', 'ecommerce', 'digital_products']);
+      let schedCountrySelectorInstance = null;
+      let schedSelectedCountries = ['US'];
+
+      // Mount Country Selector for Scheduler Form
+      if (window.NRDCountrySelector && schedCountryMount) {
+        schedCountrySelectorInstance = window.NRDCountrySelector.create({
+          container: '#sched-country-mount',
+          initialSelected: ['US'],
+          onChange: (selectedCodes) => {
+            schedSelectedCountries = selectedCodes.length > 0 ? selectedCodes : ['US'];
+          },
+        });
+      }
+
+      // Sync Business Mode Card Visuals
+      const syncBizCardVisuals = () => {
+        if (!schedBizCardsGrid) return;
+        const cards = schedBizCardsGrid.querySelectorAll('.biz-card');
+        cards.forEach((card) => {
+          const biz = card.dataset.biz;
+          const isSel = schedSelectedBizModes.has(biz);
+          card.classList.toggle('selected', isSel);
+          const check = card.querySelector('.bc-check');
+          if (check) check.style.visibility = isSel ? 'visible' : 'hidden';
+        });
+
+        if (schedBizErrorMsg) {
+          schedBizErrorMsg.style.display = schedSelectedBizModes.size === 0 ? 'block' : 'none';
+        }
+      };
+
+      if (schedBizCardsGrid) {
+        schedBizCardsGrid.querySelectorAll('.biz-card').forEach((card) => {
+          card.addEventListener('click', () => {
+            const biz = card.dataset.biz;
+            if (schedSelectedBizModes.has(biz)) {
+              schedSelectedBizModes.delete(biz);
+            } else {
+              schedSelectedBizModes.add(biz);
+            }
+            syncBizCardVisuals();
+          });
+        });
+      }
+
+      const syncScheduleModeInputs = () => {
+        const mode = schedInputModeSelect ? schedInputModeSelect.value : 'discovery';
+        if (schedOwnNicheBox) schedOwnNicheBox.style.display = mode === 'own_niche' ? 'block' : 'none';
+        if (schedOwnDomainBox) schedOwnDomainBox.style.display = mode === 'own_domain' ? 'block' : 'none';
+      };
+
+      if (schedInputModeSelect) {
+        schedInputModeSelect.addEventListener('change', syncScheduleModeInputs);
+      }
 
       const syncScheduleTypeVisibility = () => {
         const type = schedTypeSelect ? schedTypeSelect.value : 'interval';
@@ -1300,9 +1630,26 @@
 
           const cfg = schedule.run_config || {};
           if (schedInputModeSelect) schedInputModeSelect.value = cfg.input_mode || 'discovery';
-          if (schedCountrySelect) schedCountrySelect.value = (cfg.country_codes && cfg.country_codes[0]) || 'US';
           if (schedNicheQtyInput) schedNicheQtyInput.value = cfg.niche_quantity || 1;
+          if (schedOwnNicheName) schedOwnNicheName.value = cfg.niche_name || '';
+          if (schedDomainInput) schedDomainInput.value = cfg.domain || '';
           if (schedAutoApproveInput) schedAutoApproveInput.checked = cfg.auto_approve !== undefined ? cfg.auto_approve : true;
+
+          // Business Modes
+          const modes = Array.isArray(cfg.business_modes) && cfg.business_modes.length > 0
+            ? cfg.business_modes
+            : ['blogging', 'affiliate', 'ecommerce', 'digital_products'];
+          schedSelectedBizModes = new Set(modes);
+          syncBizCardVisuals();
+
+          // Country Codes
+          const cCodes = Array.isArray(cfg.country_codes) && cfg.country_codes.length > 0
+            ? cfg.country_codes
+            : ['US'];
+          schedSelectedCountries = cCodes;
+          if (schedCountrySelectorInstance && typeof schedCountrySelectorInstance.setSelected === 'function') {
+            schedCountrySelectorInstance.setSelected(cCodes);
+          }
         } else {
           if (schedFormTitle) schedFormTitle.textContent = 'Create Automated Research Schedule';
           if (schedIdInput) schedIdInput.value = '';
@@ -1313,13 +1660,24 @@
           if (schedDowSelect) schedDowSelect.value = 1;
           if (schedTimeWeeklyInput) schedTimeWeeklyInput.value = '09:00';
           if (schedCronInput) schedCronInput.value = '0 9 * * 1-5';
+          
           if (schedInputModeSelect) schedInputModeSelect.value = 'discovery';
-          if (schedCountrySelect) schedCountrySelect.value = 'US';
           if (schedNicheQtyInput) schedNicheQtyInput.value = 1;
+          if (schedOwnNicheName) schedOwnNicheName.value = '';
+          if (schedDomainInput) schedDomainInput.value = '';
           if (schedAutoApproveInput) schedAutoApproveInput.checked = true;
+
+          schedSelectedBizModes = new Set(['blogging', 'affiliate', 'ecommerce', 'digital_products']);
+          syncBizCardVisuals();
+
+          schedSelectedCountries = ['US'];
+          if (schedCountrySelectorInstance && typeof schedCountrySelectorInstance.setSelected === 'function') {
+            schedCountrySelectorInstance.setSelected(['US']);
+          }
         }
 
         syncScheduleTypeVisibility();
+        syncScheduleModeInputs();
       };
 
       const closeScheduleForm = () => {
@@ -1359,7 +1717,7 @@
             <div class="panel panel-pad" style="padding:10px 14px; background:var(--ink-900, #121214); border:1px solid ${enabled ? 'var(--line)' : 'rgba(255,255,255,0.05)'}; border-radius:8px; opacity:${enabled ? '1' : '0.65'}">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
                 <div style="display:flex; align-items:center; gap:8px">
-                  <span style="font-weight:600; font-size:13px; color:var(--text-1)">${s.name}</span>
+                  <span style="font-weight:600; font-size:13px; color:var(--text-1)">${escapeHtml(s.name)}</span>
                   <span class="badge" style="font-size:10px; padding:2px 6px; background:var(--ink-800); color:var(--text-2)">${cadenceBadge}</span>
                   ${enabled ? '<span class="badge badge-active" style="font-size:9.5px">Active</span>' : '<span class="badge" style="font-size:9.5px; background:rgba(239,68,68,0.15); color:#f87171">Disabled</span>'}
                 </div>
@@ -1460,7 +1818,7 @@
               schedFiringsList.innerHTML = allFirings.map((f) => `
                 <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 8px; background:var(--ink-950, #09090b); border:1px solid var(--border); border-radius:4px">
                   <div style="display:flex; gap:8px; align-items:center">
-                    <span style="font-weight:550; color:var(--text-1)">${f.schedule_name}</span>
+                    <span style="font-weight:550; color:var(--text-1)">${escapeHtml(f.schedule_name)}</span>
                     <span class="badge" style="font-size:9px; background:${f.status === 'launched' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'}; color:${f.status === 'launched' ? '#4ade80' : '#f87171'}">
                       ${f.status}
                     </span>
@@ -1489,6 +1847,25 @@
             return;
           }
 
+          if (schedSelectedBizModes.size === 0) {
+            NRDToast.show({ type: 'warning', title: 'Validation', msg: 'Please select at least one monetization business model.' });
+            if (schedBizErrorMsg) schedBizErrorMsg.style.display = 'block';
+            return;
+          }
+
+          const mode = schedInputModeSelect ? schedInputModeSelect.value : 'discovery';
+          const ownNiche = schedOwnNicheName ? schedOwnNicheName.value.trim() : '';
+          const ownDomain = schedDomainInput ? schedDomainInput.value.trim() : '';
+
+          if (mode === 'own_niche' && !ownNiche) {
+            NRDToast.show({ type: 'warning', title: 'Validation', msg: 'Please enter a target niche name.' });
+            return;
+          }
+          if (mode === 'own_domain' && !ownDomain) {
+            NRDToast.show({ type: 'warning', title: 'Validation', msg: 'Please enter a target domain name.' });
+            return;
+          }
+
           const type = schedTypeSelect ? schedTypeSelect.value : 'interval';
           const intervalMins = schedIntervalInput ? parseInt(schedIntervalInput.value, 10) : 60;
           const timeDaily = schedTimeDailyInput ? schedTimeDailyInput.value : '09:00';
@@ -1496,12 +1873,21 @@
           const timeWeekly = schedTimeWeeklyInput ? schedTimeWeeklyInput.value : '09:00';
           const cronExpr = schedCronInput ? schedCronInput.value.trim() : '0 9 * * 1-5';
 
+          // Get selected country codes from countrySelectorInstance if active
+          let countries = schedSelectedCountries;
+          if (schedCountrySelectorInstance && typeof schedCountrySelectorInstance.getSelected === 'function') {
+            const sel = schedCountrySelectorInstance.getSelected();
+            if (Array.isArray(sel) && sel.length > 0) countries = sel;
+          }
+
           const runPayload = {
             run_name: `${name} (Auto)`,
-            input_mode: schedInputModeSelect ? schedInputModeSelect.value : 'discovery',
-            business_modes: ['blogging'],
+            input_mode: mode,
+            business_modes: Array.from(schedSelectedBizModes),
             niche_quantity: schedNicheQtyInput ? parseInt(schedNicheQtyInput.value, 10) : 1,
-            country_codes: [schedCountrySelect ? schedCountrySelect.value : 'US'],
+            country_codes: countries,
+            niche_name: mode === 'own_niche' ? ownNiche : undefined,
+            domain: mode === 'own_domain' ? ownDomain : undefined,
             auto_approve: schedAutoApproveInput ? schedAutoApproveInput.checked : true,
           };
 
