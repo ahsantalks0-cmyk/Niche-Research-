@@ -90,6 +90,10 @@
       ? `<span class="brief-chip brief-parsed" title="Criteria Parsed ✓">Parsed ✓</span>`
       : `<span class="brief-chip brief-parsing" title="Criteria Brief Processing">Briefing…</span>`;
 
+    const scheduledBadge = run.trigger_source === 'scheduler' || run.trigger_source === 'scheduled' || run.schedule_id
+      ? `<span class="badge" style="background:rgba(147, 51, 234, 0.15); color:#c084fc; border:1px solid rgba(147, 51, 234, 0.3); font-size:10px; padding:2px 6px; border-radius:4px" title="Triggered by Schedule: ${run.schedule_name || '#' + run.schedule_id}">⏱️ Scheduled</span>`
+      : '';
+
     return `
       <div class="run-card panel-hover" data-run-id="${run.id}">
         <div class="rc-header">
@@ -97,6 +101,7 @@
             <span class="rc-id">#${run.id}</span>
             <span class="rc-name">${run.run_name || 'Research Run #' + run.id}</span>
             ${getInputModeBadgeHTML(run.input_mode)}
+            ${scheduledBadge}
             ${briefChip}
           </div>
           <div class="rc-status">

@@ -160,6 +160,139 @@
                 </div>
               </div>
             </div>
+
+            <!-- ═══════════════ Scheduler Agent (Agent #4 - P1.4) ═══════════════ -->
+            <div class="panel panel-pad" id="panel-scheduler">
+              <div class="section-label" style="display:flex; align-items:center; justify-content:space-between">
+                <span>Scheduler Agent (Agent #4)</span>
+                <div style="display:flex; gap:8px">
+                  <button class="btn btn-outline" id="btn-refresh-schedules" style="padding:3px 8px; font-size:11px">Refresh</button>
+                  <button class="btn btn-cu" id="btn-create-schedule" style="padding:3px 10px; font-size:11px">+ New Schedule</button>
+                </div>
+              </div>
+              <div style="font-size:12px; color:var(--text-3); margin-bottom:12px">
+                Automate recurring research runs on interval, daily, weekly, or cron cadences. The 30s engine loop checks for due tasks with missed-fire catch-up and concurrency protection.
+              </div>
+
+              <!-- Create / Edit Form Modal/Drawer Area -->
+              <div id="scheduler-form-card" style="display:none; margin-bottom:14px; padding:14px; background:var(--ink-950, #09090b); border:1px solid var(--border-cu, rgba(147, 51, 234, 0.3)); border-radius:8px">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
+                  <span id="scheduler-form-title" style="font-size:12.5px; font-weight:600; color:var(--text-1)">Create Automated Research Schedule</span>
+                  <button class="btn btn-ghost" id="btn-close-schedule-form" style="padding:2px 6px; font-size:11px">✕</button>
+                </div>
+                <input type="hidden" id="sched-id" value="" />
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px">
+                  <div>
+                    <label style="font-size:11px; color:var(--text-2); display:block; margin-bottom:4px">Schedule Name</label>
+                    <input class="input" id="sched-name" placeholder="e.g. Daily Tech Radar" style="width:100%; font-size:12px" />
+                  </div>
+                  <div>
+                    <label style="font-size:11px; color:var(--text-2); display:block; margin-bottom:4px">Cadence Type</label>
+                    <select class="select" id="sched-type" style="width:100%; font-size:12px">
+                      <option value="interval">Interval (Minutes)</option>
+                      <option value="daily">Daily (Time of Day)</option>
+                      <option value="weekly">Weekly (Day + Time)</option>
+                      <option value="cron">Cron Expression (5-part)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Type-specific options -->
+                <div id="sched-opt-interval" style="margin-bottom:10px">
+                  <label style="font-size:11px; color:var(--text-2); display:block; margin-bottom:4px">Interval (Minutes)</label>
+                  <input class="input" id="sched-interval" type="number" min="1" value="60" style="width:100%; font-size:12px" />
+                </div>
+
+                <div id="sched-opt-daily" style="display:none; margin-bottom:10px">
+                  <label style="font-size:11px; color:var(--text-2); display:block; margin-bottom:4px">Time of Day (HH:MM)</label>
+                  <input class="input" id="sched-time-daily" type="time" value="09:00" style="width:100%; font-size:12px" />
+                </div>
+
+                <div id="sched-opt-weekly" style="display:none; margin-bottom:10px; display:grid; grid-template-columns:1fr 1fr; gap:10px">
+                  <div>
+                    <label style="font-size:11px; color:var(--text-2); display:block; margin-bottom:4px">Day of Week</label>
+                    <select class="select" id="sched-dow" style="width:100%; font-size:12px">
+                      <option value="1">Monday</option>
+                      <option value="2">Tuesday</option>
+                      <option value="3">Wednesday</option>
+                      <option value="4">Thursday</option>
+                      <option value="5">Friday</option>
+                      <option value="6">Saturday</option>
+                      <option value="0">Sunday</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-size:11px; color:var(--text-2); display:block; margin-bottom:4px">Time (HH:MM)</label>
+                    <input class="input" id="sched-time-weekly" type="time" value="09:00" style="width:100%; font-size:12px" />
+                  </div>
+                </div>
+
+                <div id="sched-opt-cron" style="display:none; margin-bottom:10px">
+                  <label style="font-size:11px; color:var(--text-2); display:block; margin-bottom:4px">Cron Expression (min hour dom mon dow)</label>
+                  <input class="input" id="sched-cron" placeholder="0 0 * * *" value="0 9 * * 1-5" style="width:100%; font-size:12px; font-family:monospace" />
+                  <div style="font-size:10px; color:var(--text-dim); margin-top:2px">Example: "0 9 * * 1-5" = Weekdays at 9:00 AM</div>
+                </div>
+
+                <!-- Run Config Parameters -->
+                <div style="border-top:1px solid var(--border); padding-top:10px; margin-top:10px; margin-bottom:12px">
+                  <div style="font-size:11px; font-weight:600; color:var(--text-2); margin-bottom:8px">Run Parameters:</div>
+                  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px">
+                    <div>
+                      <label style="font-size:10.5px; color:var(--text-3); display:block; margin-bottom:2px">Input Mode</label>
+                      <select class="select" id="sched-input-mode" style="width:100%; font-size:11px">
+                        <option value="discovery">Discovery</option>
+                        <option value="own_niche">Own Niche</option>
+                        <option value="own_domain">Own Domain</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style="font-size:10.5px; color:var(--text-3); display:block; margin-bottom:2px">Target Market</label>
+                      <select class="select" id="sched-country" style="width:100%; font-size:11px">
+                        <option value="US">United States (US)</option>
+                        <option value="GB">United Kingdom (GB)</option>
+                        <option value="CA">Canada (CA)</option>
+                        <option value="AU">Australia (AU)</option>
+                        <option value="PK">Pakistan (PK)</option>
+                        <option value="DE">Germany (DE)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style="font-size:10.5px; color:var(--text-3); display:block; margin-bottom:2px">Niche Target</label>
+                      <input class="input" id="sched-niche-qty" type="number" min="1" max="10" value="1" style="width:100%; font-size:11px" />
+                    </div>
+                  </div>
+                  <div style="margin-top:8px; display:flex; align-items:center; gap:8px">
+                    <label class="toggle" style="scale:0.8; transform-origin:left center">
+                      <input type="checkbox" id="sched-auto-approve" checked />
+                      <span class="track"><span class="thumb"></span></span>
+                    </label>
+                    <span style="font-size:11px; color:var(--text-2)">Auto-approve pipeline (run unattended)</span>
+                  </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:8px">
+                  <button class="btn btn-outline" id="btn-cancel-schedule" style="font-size:11px; padding:4px 10px">Cancel</button>
+                  <button class="btn btn-cu" id="btn-save-schedule" style="font-size:11px; padding:4px 14px">Save Schedule</button>
+                </div>
+              </div>
+
+              <!-- Schedules Table / List -->
+              <div id="schedules-list-container" style="display:flex; flex-direction:column; gap:8px">
+                <!-- Dynamically rendered schedule cards -->
+                <div style="text-align:center; padding:18px; color:var(--text-dim); font-size:12px">Loading schedules…</div>
+              </div>
+
+              <!-- Recent Schedule Firings Drawer/List -->
+              <div style="margin-top:14px; border-top:1px solid var(--border); padding-top:10px">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+                  <span style="font-size:11.5px; font-weight:600; color:var(--text-2)">Recent Scheduler Firings Log</span>
+                </div>
+                <div id="scheduler-firings-list" style="max-height:140px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; font-size:11px">
+                  <div style="color:var(--text-dim); padding:6px 0">No recent automated firings recorded yet.</div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div style="display:flex; flex-direction:column; gap:14px">
@@ -1104,6 +1237,304 @@
           renderSystemTestsGrid();
         }
       };
+
+      /* ══════════════════════════════════════════════════════════════
+         SCHEDULER AGENT UI CONTROLLER (Agent #4 - P1.4)
+         ══════════════════════════════════════════════════════════════ */
+      const schedListContainer = document.getElementById('schedules-list-container');
+      const schedFiringsList = document.getElementById('scheduler-firings-list');
+      const schedFormCard = document.getElementById('scheduler-form-card');
+      const schedFormTitle = document.getElementById('scheduler-form-title');
+      const btnCreateSchedule = document.getElementById('btn-create-schedule');
+      const btnRefreshSchedules = document.getElementById('btn-refresh-schedules');
+      const btnCloseScheduleForm = document.getElementById('btn-close-schedule-form');
+      const btnCancelSchedule = document.getElementById('btn-cancel-schedule');
+      const btnSaveSchedule = document.getElementById('btn-save-schedule');
+
+      const schedIdInput = document.getElementById('sched-id');
+      const schedNameInput = document.getElementById('sched-name');
+      const schedTypeSelect = document.getElementById('sched-type');
+      const schedIntervalInput = document.getElementById('sched-interval');
+      const schedTimeDailyInput = document.getElementById('sched-time-daily');
+      const schedDowSelect = document.getElementById('sched-dow');
+      const schedTimeWeeklyInput = document.getElementById('sched-time-weekly');
+      const schedCronInput = document.getElementById('sched-cron');
+      const schedInputModeSelect = document.getElementById('sched-input-mode');
+      const schedCountrySelect = document.getElementById('sched-country');
+      const schedNicheQtyInput = document.getElementById('sched-niche-qty');
+      const schedAutoApproveInput = document.getElementById('sched-auto-approve');
+
+      const schedOptInterval = document.getElementById('sched-opt-interval');
+      const schedOptDaily = document.getElementById('sched-opt-daily');
+      const schedOptWeekly = document.getElementById('sched-opt-weekly');
+      const schedOptCron = document.getElementById('sched-opt-cron');
+
+      let currentSchedulesList = [];
+
+      const syncScheduleTypeVisibility = () => {
+        const type = schedTypeSelect ? schedTypeSelect.value : 'interval';
+        if (schedOptInterval) schedOptInterval.style.display = type === 'interval' ? 'block' : 'none';
+        if (schedOptDaily) schedOptDaily.style.display = type === 'daily' ? 'block' : 'none';
+        if (schedOptWeekly) schedOptWeekly.style.display = type === 'weekly' ? 'grid' : 'none';
+        if (schedOptCron) schedOptCron.style.display = type === 'cron' ? 'block' : 'none';
+      };
+
+      if (schedTypeSelect) {
+        schedTypeSelect.addEventListener('change', syncScheduleTypeVisibility);
+      }
+
+      const openScheduleForm = (schedule = null) => {
+        if (!schedFormCard) return;
+        schedFormCard.style.display = 'block';
+
+        if (schedule) {
+          if (schedFormTitle) schedFormTitle.textContent = `Edit Schedule: ${schedule.name}`;
+          if (schedIdInput) schedIdInput.value = schedule.id;
+          if (schedNameInput) schedNameInput.value = schedule.name;
+          if (schedTypeSelect) schedTypeSelect.value = schedule.schedule_type;
+          if (schedIntervalInput) schedIntervalInput.value = schedule.interval_minutes || 60;
+          if (schedTimeDailyInput) schedTimeDailyInput.value = schedule.time_of_day || '09:00';
+          if (schedDowSelect) schedDowSelect.value = schedule.day_of_week !== null ? schedule.day_of_week : 1;
+          if (schedTimeWeeklyInput) schedTimeWeeklyInput.value = schedule.time_of_day || '09:00';
+          if (schedCronInput) schedCronInput.value = schedule.cron_expr || '0 9 * * 1-5';
+
+          const cfg = schedule.run_config || {};
+          if (schedInputModeSelect) schedInputModeSelect.value = cfg.input_mode || 'discovery';
+          if (schedCountrySelect) schedCountrySelect.value = (cfg.country_codes && cfg.country_codes[0]) || 'US';
+          if (schedNicheQtyInput) schedNicheQtyInput.value = cfg.niche_quantity || 1;
+          if (schedAutoApproveInput) schedAutoApproveInput.checked = cfg.auto_approve !== undefined ? cfg.auto_approve : true;
+        } else {
+          if (schedFormTitle) schedFormTitle.textContent = 'Create Automated Research Schedule';
+          if (schedIdInput) schedIdInput.value = '';
+          if (schedNameInput) schedNameInput.value = '';
+          if (schedTypeSelect) schedTypeSelect.value = 'interval';
+          if (schedIntervalInput) schedIntervalInput.value = 60;
+          if (schedTimeDailyInput) schedTimeDailyInput.value = '09:00';
+          if (schedDowSelect) schedDowSelect.value = 1;
+          if (schedTimeWeeklyInput) schedTimeWeeklyInput.value = '09:00';
+          if (schedCronInput) schedCronInput.value = '0 9 * * 1-5';
+          if (schedInputModeSelect) schedInputModeSelect.value = 'discovery';
+          if (schedCountrySelect) schedCountrySelect.value = 'US';
+          if (schedNicheQtyInput) schedNicheQtyInput.value = 1;
+          if (schedAutoApproveInput) schedAutoApproveInput.checked = true;
+        }
+
+        syncScheduleTypeVisibility();
+      };
+
+      const closeScheduleForm = () => {
+        if (schedFormCard) schedFormCard.style.display = 'none';
+      };
+
+      if (btnCreateSchedule) btnCreateSchedule.addEventListener('click', () => openScheduleForm(null));
+      if (btnCloseScheduleForm) btnCloseScheduleForm.addEventListener('click', closeScheduleForm);
+      if (btnCancelSchedule) btnCancelSchedule.addEventListener('click', closeScheduleForm);
+
+      const renderSchedulesList = () => {
+        if (!schedListContainer) return;
+        if (!currentSchedulesList || currentSchedulesList.length === 0) {
+          schedListContainer.innerHTML = `
+            <div style="text-align:center; padding:18px; color:var(--text-dim); font-size:12px; border:1px dashed var(--line); border-radius:8px">
+              No schedules created yet. Click <strong>+ New Schedule</strong> above to automate recurring market discovery.
+            </div>
+          `;
+          return;
+        }
+
+        schedListContainer.innerHTML = currentSchedulesList.map((s) => {
+          let cadenceBadge = '';
+          if (s.schedule_type === 'interval') cadenceBadge = `⏱️ Every ${s.interval_minutes || 60}m`;
+          else if (s.schedule_type === 'daily') cadenceBadge = `🌅 Daily at ${s.time_of_day || '00:00'}`;
+          else if (s.schedule_type === 'weekly') {
+            const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            const dayName = days[s.day_of_week] || 'Mon';
+            cadenceBadge = `📅 Weekly (${dayName} ${s.time_of_day || '00:00'})`;
+          } else if (s.schedule_type === 'cron') cadenceBadge = `⚙️ Cron: <code>${s.cron_expr}</code>`;
+
+          const enabled = Boolean(s.enabled);
+          const nextDate = s.next_run_at ? new Date(s.next_run_at).toLocaleString() : 'Pending';
+          const lastDate = s.last_run_at ? new Date(s.last_run_at).toLocaleString() : 'Never';
+
+          return `
+            <div class="panel panel-pad" style="padding:10px 14px; background:var(--ink-900, #121214); border:1px solid ${enabled ? 'var(--line)' : 'rgba(255,255,255,0.05)'}; border-radius:8px; opacity:${enabled ? '1' : '0.65'}">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
+                <div style="display:flex; align-items:center; gap:8px">
+                  <span style="font-weight:600; font-size:13px; color:var(--text-1)">${s.name}</span>
+                  <span class="badge" style="font-size:10px; padding:2px 6px; background:var(--ink-800); color:var(--text-2)">${cadenceBadge}</span>
+                  ${enabled ? '<span class="badge badge-active" style="font-size:9.5px">Active</span>' : '<span class="badge" style="font-size:9.5px; background:rgba(239,68,68,0.15); color:#f87171">Disabled</span>'}
+                </div>
+                <div style="display:flex; align-items:center; gap:6px">
+                  <button class="btn btn-outline btn-sched-run-now" data-id="${s.id}" style="padding:2px 8px; font-size:10.5px" title="Trigger research run right now">Run Now</button>
+                  <button class="btn btn-outline btn-sched-edit" data-id="${s.id}" style="padding:2px 8px; font-size:10.5px">Edit</button>
+                  <button class="btn btn-outline btn-sched-toggle" data-id="${s.id}" data-enabled="${enabled ? '1' : '0'}" style="padding:2px 8px; font-size:10.5px">
+                    ${enabled ? 'Disable' : 'Enable'}
+                  </button>
+                  <button class="btn btn-ghost btn-sched-delete" data-id="${s.id}" style="padding:2px 6px; font-size:11px; color:#f87171" title="Delete Schedule">🗑️</button>
+                </div>
+              </div>
+
+              <div style="display:flex; gap:16px; font-size:11px; color:var(--text-3)">
+                <span>Next Run: <strong style="color:var(--text-2)">${nextDate}</strong></span>
+                <span>Last Fired: <strong style="color:var(--text-2)">${lastDate}</strong></span>
+                <span>Total Firings: <strong style="color:var(--text-2)">${s.firings_count || 0}</strong></span>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        // Wire Action Buttons
+        schedListContainer.querySelectorAll('.btn-sched-run-now').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const sid = btn.dataset.id;
+            btn.disabled = true;
+            btn.textContent = 'Launching…';
+            try {
+              const res = await window.schedulerAPI.runNow(sid);
+              NRDToast.show({ type: 'success', title: 'Schedule Fired', msg: `Launched Run #${res.runId} immediately.` });
+              loadSchedules();
+            } catch (err) {
+              NRDToast.show({ type: 'error', title: 'Launch Failed', msg: err.message });
+            } finally {
+              btn.disabled = false;
+              btn.textContent = 'Run Now';
+            }
+          });
+        });
+
+        schedListContainer.querySelectorAll('.btn-sched-edit').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const sid = Number(btn.dataset.id);
+            const item = currentSchedulesList.find((x) => x.id === sid);
+            if (item) openScheduleForm(item);
+          });
+        });
+
+        schedListContainer.querySelectorAll('.btn-sched-toggle').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const sid = Number(btn.dataset.id);
+            const isCurrentlyEnabled = btn.dataset.enabled === '1';
+            try {
+              await window.schedulerAPI.updateSchedule(sid, { enabled: !isCurrentlyEnabled });
+              NRDToast.show({ type: 'info', title: 'Schedule Updated', msg: `Schedule #${sid} ${!isCurrentlyEnabled ? 'enabled' : 'disabled'}.` });
+              loadSchedules();
+            } catch (err) {
+              NRDToast.show({ type: 'error', title: 'Update Error', msg: err.message });
+            }
+          });
+        });
+
+        schedListContainer.querySelectorAll('.btn-sched-delete').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const sid = Number(btn.dataset.id);
+            if (confirm(`Are you sure you want to delete Schedule #${sid}?`)) {
+              try {
+                await window.schedulerAPI.deleteSchedule(sid);
+                NRDToast.show({ type: 'info', title: 'Schedule Deleted', msg: `Deleted schedule #${sid}.` });
+                loadSchedules();
+              } catch (err) {
+                NRDToast.show({ type: 'error', title: 'Delete Error', msg: err.message });
+              }
+            }
+          });
+        });
+      };
+
+      const loadSchedules = async () => {
+        if (!window.schedulerAPI || !window.schedulerAPI.getSchedules) return;
+        try {
+          currentSchedulesList = await window.schedulerAPI.getSchedules();
+          renderSchedulesList();
+
+          // Render firings summary
+          if (schedFiringsList) {
+            const allFirings = [];
+            for (const s of currentSchedulesList.slice(0, 5)) {
+              if (s.last_firing) {
+                allFirings.push({
+                  schedule_name: s.name,
+                  ...s.last_firing,
+                });
+              }
+            }
+            if (allFirings.length > 0) {
+              schedFiringsList.innerHTML = allFirings.map((f) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 8px; background:var(--ink-950, #09090b); border:1px solid var(--border); border-radius:4px">
+                  <div style="display:flex; gap:8px; align-items:center">
+                    <span style="font-weight:550; color:var(--text-1)">${f.schedule_name}</span>
+                    <span class="badge" style="font-size:9px; background:${f.status === 'launched' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'}; color:${f.status === 'launched' ? '#4ade80' : '#f87171'}">
+                      ${f.status}
+                    </span>
+                    ${f.run_id ? `<span style="color:var(--text-3); font-size:10px">Run #${f.run_id}</span>` : ''}
+                  </div>
+                  <span style="color:var(--text-dim); font-size:10px">${new Date(f.fired_at).toLocaleTimeString()}</span>
+                </div>
+              `).join('');
+            }
+          }
+        } catch (err) {
+          console.warn('[settings] loadSchedules error:', err.message);
+        }
+      };
+
+      if (btnRefreshSchedules) {
+        btnRefreshSchedules.addEventListener('click', loadSchedules);
+      }
+
+      if (btnSaveSchedule) {
+        btnSaveSchedule.addEventListener('click', async () => {
+          const sid = schedIdInput ? schedIdInput.value : '';
+          const name = schedNameInput ? schedNameInput.value.trim() : '';
+          if (!name) {
+            NRDToast.show({ type: 'warning', title: 'Validation', msg: 'Please enter a schedule name.' });
+            return;
+          }
+
+          const type = schedTypeSelect ? schedTypeSelect.value : 'interval';
+          const intervalMins = schedIntervalInput ? parseInt(schedIntervalInput.value, 10) : 60;
+          const timeDaily = schedTimeDailyInput ? schedTimeDailyInput.value : '09:00';
+          const dow = schedDowSelect ? parseInt(schedDowSelect.value, 10) : 1;
+          const timeWeekly = schedTimeWeeklyInput ? schedTimeWeeklyInput.value : '09:00';
+          const cronExpr = schedCronInput ? schedCronInput.value.trim() : '0 9 * * 1-5';
+
+          const runPayload = {
+            run_name: `${name} (Auto)`,
+            input_mode: schedInputModeSelect ? schedInputModeSelect.value : 'discovery',
+            business_modes: ['blogging'],
+            niche_quantity: schedNicheQtyInput ? parseInt(schedNicheQtyInput.value, 10) : 1,
+            country_codes: [schedCountrySelect ? schedCountrySelect.value : 'US'],
+            auto_approve: schedAutoApproveInput ? schedAutoApproveInput.checked : true,
+          };
+
+          const payload = {
+            name,
+            schedule_type: type,
+            interval_minutes: type === 'interval' ? intervalMins : null,
+            time_of_day: type === 'daily' ? timeDaily : (type === 'weekly' ? timeWeekly : null),
+            day_of_week: type === 'weekly' ? dow : null,
+            cron_expr: type === 'cron' ? cronExpr : null,
+            run_config: runPayload,
+          };
+
+          btnSaveSchedule.disabled = true;
+          try {
+            if (sid) {
+              await window.schedulerAPI.updateSchedule(Number(sid), payload);
+              NRDToast.show({ type: 'success', title: 'Schedule Updated', msg: `Saved changes to "${name}".` });
+            } else {
+              await window.schedulerAPI.createSchedule(payload);
+              NRDToast.show({ type: 'success', title: 'Schedule Created', msg: `Created schedule "${name}".` });
+            }
+            closeScheduleForm();
+            loadSchedules();
+          } catch (err) {
+            NRDToast.show({ type: 'error', title: 'Save Failed', msg: err.message });
+          } finally {
+            btnSaveSchedule.disabled = false;
+          }
+        });
+      }
+
+      loadSchedules();
 
       if (window.engineAPI && window.engineAPI.listSystemTests) {
         window.engineAPI.listSystemTests().then((list) => {

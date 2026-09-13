@@ -32,11 +32,12 @@ const db = require('../db');
 const agentRegistry = require('./agentRegistry');
 const { emitLog } = require('./logBus');
 
-// Ensure registered agents (1–3) are loaded into Agent Registry
+// Ensure registered agents (1–4) are loaded into Agent Registry
 try {
   require('../agents/criteriaParser');
   require('../agents/departmentHead');
   require('../agents/qualitySupervisor');
+  require('../agents/scheduler');
 } catch {
   // Graceful fallback if agent files are initialized out of order in test runners
 }

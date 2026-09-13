@@ -149,3 +149,14 @@ contextBridge.exposeInMainWorld('llmAPI', {
   checkModelStatus: () => ipcRenderer.invoke('llm:checkModelStatus'),
 });
 
+contextBridge.exposeInMainWorld('schedulerAPI', {
+  getSchedules: (options) => ipcRenderer.invoke('scheduler:getSchedules', options),
+  getSchedule: (scheduleId) => ipcRenderer.invoke('scheduler:getSchedule', scheduleId),
+  getFirings: (scheduleId, limit) => ipcRenderer.invoke('scheduler:getFirings', scheduleId, limit),
+  createSchedule: (data) => ipcRenderer.invoke('scheduler:createSchedule', data),
+  updateSchedule: (scheduleId, patch) => ipcRenderer.invoke('scheduler:updateSchedule', scheduleId, patch),
+  deleteSchedule: (scheduleId) => ipcRenderer.invoke('scheduler:deleteSchedule', scheduleId),
+  runNow: (scheduleId) => ipcRenderer.invoke('scheduler:runNow', scheduleId),
+  tick: () => ipcRenderer.invoke('scheduler:tick'),
+});
+

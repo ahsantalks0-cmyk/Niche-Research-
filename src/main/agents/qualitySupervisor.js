@@ -20,20 +20,22 @@ const { emitLog } = require('../engine/logBus');
 
 /**
  * In-memory registry for per-agent quality rules.
- * @type {Map<number, { requiredFields?: Array<string>, depthMarkers?: object, customCheck?: Function }>}
+ * @type {Map<number, { requiredFields?: Array<string>, depthMarkers?: object, customCheck?: Function, outputType?: 'config' | 'research' | 'analysis' }>}
  */
 const agentRulesRegistry = new Map();
 
 /**
  * REGISTRATION API FOR FUTURE AGENTS (P3.1 onward)
  * 
- * Every agent can register its required schema fields, depth markers, and custom validation function.
+ * Every agent can register its required schema fields, depth markers, custom validation function,
+ * and outputType ('config' | 'research' | 'analysis').
  * 
  * @param {number} agentNumber Official agent number (1–35)
  * @param {object} rulesSpec
  * @param {Array<string>} [rulesSpec.requiredFields] Field paths required in agent's output
  * @param {object} [rulesSpec.depthMarkers] Key/value minimums (e.g. { minCompetitors: 5 })
  * @param {Function} [rulesSpec.customCheck] Function(output, context) -> { passed: boolean, failedRules: Array, feedback: string }
+ * @param {'config' | 'research' | 'analysis'} [rulesSpec.outputType] Output type classification
  */
 function registerQualityRules(agentNumber, rulesSpec = {}) {
   if (typeof agentNumber !== 'number' || agentNumber < 1 || agentNumber > 35) {
@@ -44,6 +46,7 @@ function registerQualityRules(agentNumber, rulesSpec = {}) {
     requiredFields: rulesSpec.requiredFields || [],
     depthMarkers: rulesSpec.depthMarkers || {},
     customCheck: typeof rulesSpec.customCheck === 'function' ? rulesSpec.customCheck : null,
+    outputType: rulesSpec.outputType || 'analysis',
   });
 }
 
@@ -53,6 +56,7 @@ function registerQualityRules(agentNumber, rulesSpec = {}) {
 
 // Agent #2: Criteria Parser Agent
 registerQualityRules(2, {
+  outputType: 'config',
   requiredFields: [
     'brief_version',
     'input_mode',
@@ -103,6 +107,7 @@ registerQualityRules(2, {
 
 // Agent #1: Department Head Agent
 registerQualityRules(1, {
+  outputType: 'config',
   requiredFields: ['phases', 'agent_nodes', 'estimated_scope'],
   customCheck: (rawOutput, context) => {
     const failedRules = [];
@@ -142,6 +147,28 @@ registerQualityRules(1, {
       });
     }
 
+    return {
+      passed: failedRules.length === 0,
+      failedRules,
+      feedback: failedRules.map((f) => `${f.rule}: expected ${f.expected}, got ${f.actual}`).join('; '),
+    };
+  },
+});
+
+// Agent #4: Scheduler Agent
+registerQualityRules(4, {
+  outputType: 'config',
+  requiredFields: ['status', 'due_schedules_count', 'fired_count'],
+  customCheck: (rawOutput) => {
+    const failedRules = [];
+    const output = rawOutput.scheduler_result || rawOutput;
+    if (typeof output.fired_count !== 'number') {
+      failedRules.push({
+        rule: 'R2_SCHEMA_COMPLETENESS',
+        expected: 'fired_count number',
+        actual: typeof output.fired_count,
+      });
+    }
     return {
       passed: failedRules.length === 0,
       failedRules,
@@ -332,14 +359,25 @@ function runStage1Checks(agentNumber, output, context = {}) {
 
 /**
  * Runs Stage 2 Gemini Semantic Review for analytical outputs.
- * Gracefully skips if Gemini API key is not configured or output is non-textual.
+ * Gracefully skips if Gemini API key is not configured, output is non-textual, or output is of type 'config'.
  * 
  * @param {number} agentNumber
  * @param {any} output
  * @param {object} context
+ * @param {number|null} runId
+ * @param {number} [passedStage1Count=1]
+ * @param {number} [totalStage1Count=1]
  * @returns {Promise<{ verdict: 'pass' | 'send_back' | 'skip', feedback: string }>}
  */
-async function runStage2GeminiReview(agentNumber, output, context = {}, runId = null) {
+async function runStage2GeminiReview(agentNumber, output, context = {}, runId = null, passedStage1Count = 1, totalStage1Count = 1) {
+  const registered = agentRulesRegistry.get(agentNumber);
+  const outputType = registered?.outputType || 'analysis';
+
+  if (outputType === 'config') {
+    emitLog('QS', `⏩ Stage 2 skipped — config-type output (Stage 1: ${passedStage1Count}/${totalStage1Count} ✓)`, { runId, agentNumber });
+    return { verdict: 'skip', feedback: `Stage 2 skipped — config-type output (Stage 1: ${passedStage1Count}/${totalStage1Count} ✓)` };
+  }
+
   // Only run Stage 2 check if agent output has textual/analytical content
   const outputText = typeof output === 'string' ? output : JSON.stringify(output);
   if (!outputText || outputText.length < 100) {
@@ -350,12 +388,19 @@ async function runStage2GeminiReview(agentNumber, output, context = {}, runId = 
   const t0_stage2 = Date.now();
   emitLog('QS', '🧠 Running Stage 2 semantic review via Gemini...', { runId, agentNumber });
 
+  const agentDef = agentRegistry.get(agentNumber);
+  const agentName = agentDef?.name || `Agent #${agentNumber}`;
+  const agentPurpose = agentDef?.desc || 'specialist research analysis';
+
   try {
-    const prompt = `You are the Quality Supervisor Agent reviewing an AI agent's analysis output for an automated market research application.
+    const prompt = `You are the Quality Supervisor Agent reviewing an AI agent's output for an automated market research application.
+You are reviewing the output of ${agentName}, whose job is ${agentPurpose}.
+Evaluate whether THIS output fulfills THAT specific job with specific, grounded data — not whether it looks like generic market research.
+
 Output snippet to evaluate:
 ${outputText.slice(0, 1500)}
 
-Evaluate: Is this analysis SPECIFIC and GROUNDED in data, or generic template fluff that could have been written without research?
+Evaluate: Is this analysis SPECIFIC and GROUNDED in data for its specific role, or generic template fluff that could have been written without research?
 Reply with EXACTLY ONE line starting with either "PASS: <reason>" or "SEND-BACK: <reason>".`;
 
     const res = await llmClient.chat({
@@ -440,7 +485,7 @@ async function reviewOutput({ runId, agentNumber, output, context = {}, reviewRo
 
   // 2. Stage 2 Gemini Semantic Review (only if Stage 1 passes)
   if (stage1Result.passed) {
-    const stage2Result = await runStage2GeminiReview(agentNum, output, context, runIdNum);
+    const stage2Result = await runStage2GeminiReview(agentNum, output, context, runIdNum, passedCount, totalRules);
     stage2Verdict = stage2Result.verdict;
     stage2Feedback = stage2Result.feedback;
   }
@@ -541,11 +586,23 @@ agentRegistry.register(
   }
 );
 
+function getRules(agentNumber) {
+  return agentRulesRegistry.get(Number(agentNumber)) || null;
+}
+
 module.exports = {
   registerQualityRules,
+  getRules,
   runStage1Checks,
   runStage2GeminiReview,
   reviewOutput,
   qualitySupervisorAgentHandler,
   agentRulesRegistry,
+  get rulesRegistry() {
+    const obj = {};
+    for (const [k, v] of agentRulesRegistry.entries()) {
+      obj[k] = v;
+    }
+    return obj;
+  },
 };

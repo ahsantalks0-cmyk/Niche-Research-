@@ -178,6 +178,14 @@ app.whenReady().then(() => {
     console.warn('[main] Could not initialize chain engine recovery:', err.message);
   }
 
+  // Initialize Scheduler Agent (Agent #4 - P1.4)
+  try {
+    const { scheduler } = require('./agents/scheduler');
+    scheduler.start();
+  } catch (err) {
+    console.warn('[main] Could not initialize scheduler:', err.message);
+  }
+
   // Silent update check ~2.5s after launch, so it never blocks first paint.
   setTimeout(() => updater.checkOnStart(), 2500);
 
@@ -203,5 +211,9 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  try {
+    const { scheduler } = require('./agents/scheduler');
+    scheduler.stop();
+  } catch {}
   browserEngine.close().catch(() => {});
 });

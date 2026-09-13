@@ -16,6 +16,7 @@ const migrationV3 = require('./migrations/v3');
 const migrationV4 = require('./migrations/v4');
 const migrationV5 = require('./migrations/v5');
 const migrationV6 = require('./migrations/v6');
+const migrationV7 = require('./migrations/v7');
 
 const MIGRATIONS = [
   migrationV1,
@@ -24,6 +25,7 @@ const MIGRATIONS = [
   migrationV4,
   migrationV5,
   migrationV6,
+  migrationV7,
 ];
 
 let _db = null;
@@ -508,6 +510,7 @@ function createRun(runData, countryCodes = [], criteriaBrief = {}) {
       approval_gate_passed: runData.approval_gate_passed ? 1 : 0,
       auto_approve: runData.auto_approve ? 1 : 0,
       trigger_source: runData.trigger_source || 'ui',
+      schedule_id: runData.schedule_id || null,
     };
 
     const runInfo = insert('research_runs', runPayload);
@@ -602,7 +605,13 @@ function getRuns(options = {}) {
   const db = getDb();
   const limit = options.limit || 50;
   const offset = options.offset || 0;
-  const runs = db.prepare('SELECT * FROM research_runs ORDER BY id DESC LIMIT ? OFFSET ?').all(limit, offset);
+  const runs = db.prepare(`
+    SELECT r.*, s.name AS schedule_name 
+    FROM research_runs r
+    LEFT JOIN schedules s ON r.schedule_id = s.id
+    ORDER BY r.id DESC 
+    LIMIT ? OFFSET ?
+  `).all(limit, offset);
 
   return runs.map((run) => {
     let businessModes = [];
@@ -1276,6 +1285,86 @@ function clearLiveLogs() {
   return info.changes;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   SCHEDULES & SCHEDULE FIRINGS (P1.4 Scheduler Agent)
+   ══════════════════════════════════════════════════════════════ */
+
+/**
+ * Returns all schedules with their latest firing info and firings count.
+ * @param {object} [options={}]
+ * @returns {Array<object>}
+ */
+function getSchedules(options = {}) {
+  const db = getDb();
+  const where = options.enabledOnly ? 'WHERE enabled = 1' : '';
+  const rows = db.prepare(`SELECT * FROM schedules ${where} ORDER BY id DESC`).all();
+
+  return rows.map((s) => {
+    let runConfig = {};
+    try {
+      runConfig = typeof s.run_config_json === 'string' ? JSON.parse(s.run_config_json) : s.run_config_json;
+    } catch {
+      runConfig = {};
+    }
+
+    const firingsCount = db.prepare('SELECT COUNT(*) as cnt FROM schedule_firings WHERE schedule_id = ?').get(s.id)?.cnt || 0;
+    const lastFiring = db.prepare('SELECT * FROM schedule_firings WHERE schedule_id = ? ORDER BY id DESC LIMIT 1').get(s.id) || null;
+
+    return {
+      ...s,
+      enabled: Boolean(s.enabled),
+      run_config: runConfig,
+      firings_count: firingsCount,
+      last_firing: lastFiring,
+    };
+  });
+}
+
+/**
+ * Returns a single schedule by ID with recent firings.
+ * @param {number} scheduleId
+ * @returns {object | null}
+ */
+function getSchedule(scheduleId) {
+  const db = getDb();
+  const s = db.prepare('SELECT * FROM schedules WHERE id = ?').get(Number(scheduleId));
+  if (!s) return null;
+
+  let runConfig = {};
+  try {
+    runConfig = typeof s.run_config_json === 'string' ? JSON.parse(s.run_config_json) : s.run_config_json;
+  } catch {
+    runConfig = {};
+  }
+
+  const firings = db.prepare('SELECT * FROM schedule_firings WHERE schedule_id = ? ORDER BY id DESC LIMIT 20').all(s.id);
+
+  return {
+    ...s,
+    enabled: Boolean(s.enabled),
+    run_config: runConfig,
+    firings,
+  };
+}
+
+/**
+ * Returns firings for a given schedule ID.
+ * @param {number} scheduleId
+ * @param {number} [limit=10]
+ * @returns {Array<object>}
+ */
+function getScheduleFirings(scheduleId, limit = 10) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT sf.*, r.run_name, r.status AS run_status 
+    FROM schedule_firings sf
+    LEFT JOIN research_runs r ON sf.run_id = r.id
+    WHERE sf.schedule_id = ? 
+    ORDER BY sf.id DESC 
+    LIMIT ?
+  `).all(Number(scheduleId), limit);
+}
+
 module.exports = {
   getDbPath,
   getDb,
@@ -1314,4 +1403,7 @@ module.exports = {
   getAllLiveLogs,
   pruneLiveLogs,
   clearLiveLogs,
+  getSchedules,
+  getSchedule,
+  getScheduleFirings,
 };

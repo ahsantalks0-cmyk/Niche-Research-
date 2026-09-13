@@ -84,6 +84,44 @@ function registerDbIpc() {
     return db.getNichesByRun(runId);
   });
 
+  // Scheduler Agent (Agent #4 - P1.4)
+  ipcMain.handle('scheduler:getSchedules', (_e, options) => {
+    return db.getSchedules(options);
+  });
+
+  ipcMain.handle('scheduler:getSchedule', (_e, scheduleId) => {
+    return db.getSchedule(scheduleId);
+  });
+
+  ipcMain.handle('scheduler:getFirings', (_e, scheduleId, limit) => {
+    return db.getScheduleFirings(scheduleId, limit);
+  });
+
+  ipcMain.handle('scheduler:createSchedule', (_e, data) => {
+    const { scheduler } = require('./agents/scheduler');
+    return scheduler.createSchedule(data);
+  });
+
+  ipcMain.handle('scheduler:updateSchedule', (_e, scheduleId, patch) => {
+    const { scheduler } = require('./agents/scheduler');
+    return scheduler.updateSchedule(scheduleId, patch);
+  });
+
+  ipcMain.handle('scheduler:deleteSchedule', (_e, scheduleId) => {
+    const { scheduler } = require('./agents/scheduler');
+    return scheduler.deleteSchedule(scheduleId);
+  });
+
+  ipcMain.handle('scheduler:runNow', async (_e, scheduleId) => {
+    const { scheduler } = require('./agents/scheduler');
+    return await scheduler.runNow(scheduleId);
+  });
+
+  ipcMain.handle('scheduler:tick', async () => {
+    const { scheduler } = require('./agents/scheduler');
+    return await scheduler.tick();
+  });
+
   // KPI & Health
   ipcMain.handle('db:getCounts', () => {
     return db.getCounts();
